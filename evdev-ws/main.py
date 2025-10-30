@@ -40,10 +40,17 @@ def udev_handler(addqueue: queue.Queue, done: asyncio.Event):
             addqueue.put((device.properties["ID_PATH"], device.properties["DEVNAME"]))
 
 
+states = {
+    evdev.KeyEvent.key_up: "up",
+    evdev.KeyEvent.key_down: "down",
+    evdev.KeyEvent.key_hold: "hold",
+}
+
+
 def kbd_handler(
     addqueue: queue.Queue,
     port_to_dev: dict[str, evdev.InputDevice],
-    enqueue: typing.Callable[[tuple[str, str]], None],
+    enqueue: typing.Callable[[tuple[str, str, str]], None],
     done: asyncio.Event,
 ):
     fd_to_dev = dict[int, evdev.InputDevice]()
@@ -91,18 +98,20 @@ def kbd_handler(
                     event = evdev.categorize(event)
                     match event:
                         case evdev.KeyEvent() as key_event:
-                            if key_event.keystate == evdev.KeyEvent.key_down:
-                                print(f"Key pressed: {key_event.keycode} on {port}")
-                                enqueue(
+                            print(
+                                f"Key {states[key_event.keystate]}: {key_event.keycode} on {port}"
+                            )
+                            enqueue(
+                                (
+                                    port,
+                                    states[key_event.keystate],
                                     (
-                                        port,
-                                        (
-                                            ",".join(key_event.keycode)
-                                            if isinstance(key_event.keycode, tuple)
-                                            else key_event.keycode
-                                        ),
-                                    )
+                                        ",".join(key_event.keycode)
+                                        if isinstance(key_event.keycode, tuple)
+                                        else key_event.keycode
+                                    ),
                                 )
+                            )
             except OSError as e:
                 if e.errno == 19:  # No such device
                     print(f"Keyboard disconnected: {keyboard.path}")
@@ -175,12 +184,13 @@ async def main():
     port_to_device = dict[str, evdev.InputDevice]()
     udevqueue = queue.Queue()
 
-    def enqueue(msg: tuple[str, str]):
+    def enqueue(msg: tuple[str, str, str]):
         def do():
             for client in broadcast:
                 client.put_nowait(msg)
 
-        loop.call_soon_threadsafe(do)
+        if loop.is_running():
+            loop.call_soon_threadsafe(do)
 
     server = websockets.asyncio.server.serve(
         lambda ws: ws_handler(ws, broadcast, port_to_device),
