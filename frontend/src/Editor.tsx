@@ -1,0 +1,216 @@
+import type { ReactNode } from "react";
+import { finnishLayout, type KeyboardLayout } from "./keyboards";
+
+// Finnish layout
+
+const navigationKeys = new Set([
+  "KEY_LEFT",
+  "KEY_RIGHT",
+  "KEY_UP",
+  "KEY_DOWN",
+  "KEY_HOME",
+  "KEY_END",
+  "KEY_PAGEUP",
+  "KEY_PAGEDOWN",
+]);
+
+export class EditorState {
+  seenKeyboards: Set<string> = new Set();
+  layouts: Map<string, KeyboardLayout> = new Map();
+  code: string[][];
+  row: number = 0;
+  col: number = 0;
+  ctrl: boolean = false;
+  shift: boolean = false;
+  altGr: boolean = false;
+
+  constructor(code: string = "") {
+    this.code = code.split("\n").map((line) => line.split(""));
+  }
+
+  getCode() {
+    return this.code.join("\n");
+  }
+
+  render(): ReactNode {
+    return this.code.map((line, i) => {
+      const isCursorLine = i === this.row;
+      return (
+        <div key={i} className="whitespace-pre font-mono">
+          {line.map((char, j) => {
+            const isCursorChar = isCursorLine && j === this.col;
+            return isCursorChar ? (
+              <span key={j} className="bg-white text-black">
+                {char}
+              </span>
+            ) : (
+              <span key={j}>{char}</span>
+            );
+          })}
+          {isCursorLine && this.col >= line.length && <span className="bg-white text-black"> </span>}
+        </div>
+      );
+    });
+  }
+
+  get line() {
+    return this.code[this.row];
+  }
+
+  set line(value: string[]) {
+    this.code[this.row] = value;
+  }
+
+  get realCol() {
+    return Math.min(this.col, this.line.length);
+  }
+
+  act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false) {
+    this.seenKeyboards.add(keyboard);
+    const layout = this.layouts.get(keyboard) || finnishLayout;
+
+    // Track modifier keys
+    if (key === "KEY_LEFTCTRL" || key === "KEY_RIGHTCTRL") {
+      this.ctrl = state !== "up";
+      return false;
+    }
+    if (key === "KEY_LEFTSHIFT" || key === "KEY_RIGHTSHIFT") {
+      this.shift = state !== "up";
+      return false;
+    }
+    if (key === "KEY_RIGHTALT") {
+      this.altGr = state !== "up";
+      return false;
+    }
+
+    // Ignore other key releases
+    if (state === "up") return false;
+
+    // Special actions
+    if (this.ctrl && key === "KEY_ENTER") return "submit";
+
+    // If this is not our turn, and not a navigation key, press something dumb
+    if (messUp && !navigationKeys.has(key)) {
+      const choices = [
+        ...Object.keys({
+          ...layout.normal,
+          ...layout.shifted,
+          ...layout.altGr,
+          ...layout.shiftedAltGr,
+        }),
+        "BACKSPACE",
+        "ENTER",
+        "DELETE",
+        "SPACE",
+      ];
+      key = choices[Math.floor(Math.random() * choices.length)];
+    }
+
+    switch (key) {
+      // Navigation and editing keys
+      case "KEY_LEFT":
+        if (this.col > 0) {
+          this.col--;
+        } else if (this.row > 0) {
+          this.row--;
+          this.col = this.line.length;
+        }
+        return true;
+      case "KEY_RIGHT":
+        if (this.col < this.line.length) {
+          this.col++;
+        } else if (this.row < this.code.length - 1) {
+          this.row++;
+          this.col = 0;
+        }
+        return true;
+      case "KEY_UP":
+        if (this.row > 0) {
+          this.row--;
+        } else {
+          this.col = 0;
+        }
+        return true;
+      case "KEY_DOWN":
+        if (this.row < this.code.length - 1) {
+          this.row++;
+        }
+        return true;
+      case "KEY_HOME":
+        if (this.ctrl) {
+          this.row = 0;
+        }
+        this.col = 0;
+        return true;
+      case "KEY_END":
+        if (this.ctrl) {
+          this.row = this.code.length - 1;
+        }
+        this.col = this.line.length;
+        return true;
+      case "KEY_PAGEUP":
+        this.row = 0;
+        this.col = 0;
+        return true;
+      case "KEY_PAGEDOWN":
+        this.row = this.code.length - 1;
+        this.col = this.line.length;
+        return true;
+      case "KEY_BACKSPACE":
+        if (this.realCol > 0) {
+          this.line.splice(this.realCol - 1, 1);
+          this.col--;
+        } else if (this.row > 0) {
+          const [currLine] = this.code.splice(this.row, 1);
+          this.row--;
+          this.col = this.line.length;
+          this.line = this.line.concat(currLine);
+        }
+        return true;
+      case "KEY_DELETE":
+        if (this.shift) return false; // ignore shift+delete, usually means "cut"
+
+        if (this.realCol < this.line.length) {
+          this.line.splice(this.realCol, 1);
+        } else if (this.row < this.code.length - 1) {
+          const [nextLine] = this.code.splice(this.row + 1, 1);
+          this.line = this.line.concat(nextLine);
+        }
+        return true;
+      case "KEY_ENTER": {
+        this.code.splice(this.row + 1, 0, this.line.splice(this.realCol));
+        this.row++;
+        this.col = 0;
+        return true;
+      }
+
+      // Regular character input
+      default: {
+        // Ignore Ctrl+key combinations
+        if (this.ctrl) return false;
+
+        const name = key.slice(4); // remove "KEY_"
+        let char = this.altGr
+          ? this.shift
+            ? layout.shiftedAltGr[name]
+            : layout.altGr[name]
+          : this.shift
+          ? layout.shifted[name]
+          : layout.normal[name];
+
+        // When "pressing something dumb", ignore AltGrs that don't produce a character
+        if (messUp && this.altGr && !char) {
+          char = this.shift ? layout.shifted[name] : layout.normal[name];
+        }
+
+        if (char) {
+          this.line.splice(this.realCol, 0, char);
+          this.col++;
+          this.col = this.realCol;
+          return true;
+        }
+        return false;
+      }
+    }
+  }
+}
