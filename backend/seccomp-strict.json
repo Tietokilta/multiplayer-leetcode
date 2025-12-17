@@ -1,0 +1,111 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "architectures": [
+    "SCMP_ARCH_X86_64",
+    "SCMP_ARCH_X86",
+    "SCMP_ARCH_X32"
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "read",
+        "write",
+        "close",
+        "fcntl",
+        "ioctl",
+        "exit",
+        "exit_group",
+        "futex",
+        "rt_sigaction",
+        "rt_sigreturn",
+        "clock_gettime",
+        "clock_nanosleep",
+        "getrandom",
+        "brk",
+        "mmap",
+        "mprotect",
+        "munmap",
+        "pread64",
+        "pwrite64",
+        "lseek",
+        "fadvise64",
+        "getpid",
+        "geteuid",
+        "getuid",
+        "getegid",
+        "getgid",
+        "gettid",
+        "getppid",
+        "setpgid",
+        "kill",
+        "tgkill",
+        "tgkill64",
+        "sched_yield",
+        "nanosleep",
+        "timer_create",
+        "timer_settime",
+        "timer_gettime",
+        "timer_delete",
+        "timer_getoverrun",
+        "readlink",
+        "readlinkat",
+        "statfs",
+        "fstatfs",
+        "stat",
+        "lstat",
+        "fstat",
+        "fstatat",
+        "newfstatat",
+        "getcwd",
+        "getdents64",
+        "getdents",
+        "access",
+        "fork",
+        "vfork",
+        "clone",
+        "execve",
+        "rseq",
+        "arch_prctl",
+        "set_tid_address",
+        "set_robust_list",
+        "prlimit64",
+        "rt_sigprocmask",
+        "rt_sigsuspend",
+        "epoll_ctl",
+        "epoll_wait",
+        "epoll_pwait",
+        "wait4",
+        "epoll_create1",
+        "sched_getaffinity",
+        "uname"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+
+    {
+      "name": "open",
+      "action": "SCMP_ACT_ALLOW",
+      "args": [
+        {
+          "index": 1,
+          "value": 0,
+          "valueTwo": 3,
+          "op": "SCMP_CMP_MASKED_EQ"
+        }
+      ]
+    },
+
+    {
+      "name": "openat",
+      "action": "SCMP_ACT_ALLOW",
+      "args": [
+        {
+          "index": 2,
+          "value": 0,
+          "valueTwo": 3,
+          "op": "SCMP_CMP_MASKED_EQ"
+        }
+      ]
+    }
+  ]
+}

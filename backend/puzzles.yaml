@@ -1,0 +1,115 @@
+- id: helloworld
+  title: Hello World
+  description: Write a program that prints "Hello, World!" to the console.
+  template: |
+    # Your code here
+    |
+  start_pos: [0, 0]
+  wrapper: "{}"
+  expected_output: "Hello, World!"
+
+- id: sum
+  title: Sum of Two Numbers
+  description: Write a function that takes two integers as input and prints their sum.
+  template: |
+    def sum_two_numbers(a, b):
+      # Your code here
+      |
+  wrapper: |
+    sum_two_numbers(1, 1)
+    sum_two_numbers(2, 3)
+    sum_two_numbers(98234, 12342)
+    sum_two_numbers(0, 0)
+    sum_two_numbers(-5, 12)
+  expected_output: |
+    2
+    5
+    110576
+    0
+    7
+
+- id: fibonacci
+  title: Fibonacci Sequence
+  description: |
+    Write a function that prints the first N numbers in the Fibonacci sequence.
+
+    The Fibonacci sequence starts with 1 and 1, and each subsequent number is the sum of the two preceding ones.
+
+    For example, the first 6 numbers in the Fibonacci sequence are:
+    1
+    1
+    1 + 1 = 2
+    1 + 2 = 3
+    2 + 3 = 5
+    3 + 5 = 8
+  template: |
+    def fibonacci(n):
+      # Your code here
+      |
+  wrapper: |
+    fibonacci(5)
+    print()
+    fibonacci(10)
+    print()
+    fibonacci(1)
+    print()
+    fibonacci(0)
+    print()
+    fibonacci(15)
+  expected_output: |
+    1
+    1
+    2
+    3
+    5
+
+    1
+    1
+    2
+    3
+    5
+    8
+    13
+    21
+    34
+    55
+
+    1
+
+
+    1
+    1
+    2
+    3
+    5
+    8
+    13
+    21
+    34
+    55
+    89
+    144
+    233
+    377
+    610
+
+- id: factorial
+  title: Factorial
+  description: |
+    Write a function that prints the factorial of a given non-negative integer.
+
+    The factorial of a number is the product of all positive integers less than or equal to that number; for example, the factorial of 5 is 5 × 4 × 3 × 2 × 1 = 120.
+  template: |
+    def factorial(n):
+      # Your code here
+      |
+  wrapper: |
+    print(factorial(5))
+    print(factorial(10))
+    print(factorial(1))
+    print(factorial(7))
+  expected_output: |
+    120
+    3628800
+    1
+    5040

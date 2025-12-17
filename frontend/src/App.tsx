@@ -9,9 +9,12 @@ type GameServerCmd =
 
 type GameServerMessage =
   | { type: "welcome" }
-  | { type: "new_task"; description: "string"; template: string }
+  | { type: "editor"; code: string; row: number; col: number }
+  | { type: "puzzle"; title: string; description: string }
   | { type: "output"; content: string }
-  | { type: "debuffs"; debuffs: string[] };
+  | { type: "state"; state: "running" | "valid" | "invalid"; error?: string }
+  | { type: "debuffs"; debuffs: string[] }
+  | { type: "error"; message: string };
 
 type KeyboardServerCmd = [keyboardId: string, numLock: 0 | 1, capsLock: 0 | 1, scrollLock: 0 | 1];
 
