@@ -6,7 +6,7 @@ from os import environ
 import signal
 from subprocess import PIPE, STDOUT
 import traceback
-from typing import Literal
+from typing import Literal, AsyncGenerator, TypedDict, NotRequired
 
 import aiosqlite
 from websockets import WebSocketException, ServerConnection, serve
@@ -18,7 +18,50 @@ log = getLogger(__name__)
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
 
 
-async def run_code(code: str, input: str, submission: "Submission"):
+class WelcomeMessage(TypedDict):
+    type: Literal["welcome"] | Literal["admin_welcome"]
+
+
+class CodeRunOutput(TypedDict):
+    type: Literal["output"]
+    content: str
+
+
+class CodeRunState(TypedDict):
+    type: Literal["state"]
+    state: Literal["running", "valid", "invalid"]
+    error: NotRequired[str]
+
+
+class ActionError(TypedDict):
+    type: Literal["error"]
+    message: str
+
+
+class PuzzleJson(TypedDict):
+    """A puzzle to be shown to the player."""
+    type: Literal["puzzle"]
+    title: str
+    description: str
+
+
+class PlayerJson(TypedDict):
+    """The current state of a player's code editor, sent on startup."""
+    type: Literal["editor"]
+    code: str
+    row: int
+    col: int
+
+
+type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson
+
+
+async def run_code(
+    code: str, input: str, submission: "Submission"
+) -> AsyncGenerator[CodeRunOutput | CodeRunState, None]:
+    """
+    Runs the given code in a restricted Docker container, yielding output and results incrementally.
+    """
     args = [
         "docker",
         "run",
@@ -123,7 +166,8 @@ class Player:
     conn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     tx_queue: asyncio.Queue | None = None
 
-    def editor_json(self):
+    def editor_json(self) -> PlayerJson:
+        """Returns the current editor state as JSON."""
         return {
             "type": "editor",
             "code": self.code,
@@ -131,11 +175,13 @@ class Player:
             "col": self.col,
         }
 
-    def send(self, message: dict):
+    def send(self, message: WsMessage):
+        """Send a message to the player's websocket, if connected."""
         if self.tx_queue:
             self.tx_queue.put_nowait(message)
 
     async def tx_queue_task(self, queue: asyncio.Queue, ws: ServerConnection):
+        """Task to send messages coming into the tx_queue to the player's websocket."""
         try:
             while True:
                 result = await queue.get()
@@ -152,6 +198,7 @@ class Player:
             await ws.close()
 
     async def connected(self, ws: ServerConnection):
+        """Disconnects any previous connection for this player and sets up a new one."""
         async with self.conn_lock:
             # Disconnect previous connection if exists
             if self.tx_queue:
@@ -170,7 +217,8 @@ class Puzzle:
     wrapper: str  # wrapper to insert user code in with format()
     expected_output: str
 
-    def json(self):
+    def json(self) -> PuzzleJson:
+        """Returns the puzzle data as JSON."""
         return {
             "type": "puzzle",
             "title": self.title,
@@ -180,6 +228,8 @@ class Puzzle:
 
 @dataclass
 class Submission:
+    """State of a player's submission for a puzzle."""
+
     puzzle: Puzzle
     code: str
     output: str = ""
@@ -197,20 +247,23 @@ class PlayerManager:
         self.puzzles: dict[str, Puzzle] = {}
         self.current_puzzle: Puzzle | None = None
 
-    async def load_players(self):
+    async def load_players(self) -> None:
+        """Loads players from the database into memory."""
         async with self.db.execute("SELECT id, name, score, code, col, row FROM players") as cursor:
             for row in await cursor.fetchall():
                 player = Player(*row)
                 self.players[player.name] = player
 
-    async def player_connected(self, name: str, ws: ServerConnection):
+    async def player_connected(self, name: str, ws: ServerConnection) -> Player:
+        """Adds a player connecting via websocket."""
         if name not in self.players:
             raise ValueError("No such player")
         player = self.players[name]
         await player.connected(ws)
         return player
 
-    async def switch_puzzle(self, id: str):
+    async def switch_puzzle(self, id: str) -> ActionError | None:
+        """Changes the current puzzle to the given one."""
         if id not in self.puzzles:
             return {"type": "error", "message": "No such puzzle"}
         puzzle = self.puzzles[id]
@@ -245,7 +298,8 @@ class PlayerManager:
             player.send(player.editor_json())
         return None
 
-    async def _submit_task(self, player: Player, submission: Submission):
+    async def _submit_task(self, player: Player, submission: Submission) -> None:
+        """Task to run a player's submission and handle its results."""
         try:
             async for result in run_code(player.code, "", submission):
                 # Send outputs only if still on the same puzzle
@@ -272,7 +326,8 @@ class PlayerManager:
             )
             await self.db.commit()
 
-    def submit(self, player: Player) -> dict[str, str] | None:
+    def submit(self, player: Player) -> ActionError | None:
+        """Attempts to submit the player's current code for evaluation. Does not wait for the result."""
         if not self.current_puzzle:
             return {"type": "error", "message": "No puzzle loaded"}
 
@@ -290,6 +345,7 @@ class PlayerManager:
         return None
 
     def reload_puzzles(self):
+        """Reloads puzzles from puzzles.yaml."""
         log.info("Reloading puzzles from puzzles.yaml")
         try:
             data = safe_load(open("puzzles.yaml", "r", encoding="utf-8"))
@@ -310,7 +366,8 @@ class PlayerManager:
             self.puzzles = puzzles
 
 
-async def send(ws: ServerConnection, message: dict):
+async def send(ws: ServerConnection, message: WsMessage):
+    """Sends a JSON message over the websocket."""
     await ws.send(json.dumps(message), True)
 
 
@@ -318,6 +375,7 @@ async def ws_handler(
     ws: ServerConnection,
     manager: PlayerManager,
 ):
+    """Main websocket handler for player/admin connections."""
     player: Player | None = None
     admin = False
     async for message in ws:
@@ -394,6 +452,7 @@ async def ws_handler(
 
 
 async def save_players_periodically(manager: PlayerManager, done: asyncio.Event):
+    """Periodically saves modified player states to the database."""
     while manager.unsaved or not done.is_set():
         # Check every 1 second, unless doing final save on shutdown
         try:
