@@ -32,8 +32,9 @@ const navigationKeys = new Set([
   "KEY_PAGEDOWN",
 ]);
 
+export type EditorAction = "edit" | "navigate" | "submit" | false;
+
 export class EditorState {
-  seenKeyboards: string[] = [];
   layouts: Map<string, KeyboardLayout> = new Map();
   code: string[][];
   row: number = 0;
@@ -41,26 +42,13 @@ export class EditorState {
   ctrl: boolean = false;
   shift: boolean = false;
   altGr: boolean = false;
-  
-  // Cycling: which keyboard's turn is it?
-  currentTurnIndex: number = 0;
 
   constructor(code: string = "") {
     this.code = code.split("\n").map((line) => line.split(""));
   }
 
-  get currentKeyboard(): string | undefined {
-    return this.seenKeyboards[this.currentTurnIndex];
-  }
-
-  advanceTurn() {
-    if (this.seenKeyboards.length > 0) {
-      this.currentTurnIndex = (this.currentTurnIndex + 1) % this.seenKeyboards.length;
-    }
-  }
-
   getCode() {
-    return this.code.map(line => line.join("")).join("\n");
+    return this.code.map((line) => line.join("")).join("\n");
   }
 
   render(): ReactNode {
@@ -97,7 +85,7 @@ export class EditorState {
     return Math.min(this.col, this.line.length);
   }
 
-  actLocal(evt: KeyboardEvent, messUp: boolean = false) {
+  actLocal(evt: KeyboardEvent, messUp: boolean = false): EditorAction {
     // Map KeyboardEvent.code to evdev key names
     const key = keyMapping[evt.code] || `KEY_${evt.code.replace(/^Key|^Digit/, "").toUpperCase()}`;
     // Map event type to state
@@ -105,16 +93,8 @@ export class EditorState {
     return this.act("local", key, state, messUp);
   }
 
-  act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false, noCycling: boolean = false) {
-    // Register new keyboards in order
-    if (!this.seenKeyboards.includes(keyboard)) {
-      this.seenKeyboards.push(keyboard);
-    }
+  act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false): EditorAction {
     const layout = this.layouts.get(keyboard) || finnishLayout;
-    
-    // Determine if this keyboard's turn (all keyboards valid until we have enough, or if noCycling mode)
-    const isMyTurn = noCycling || this.seenKeyboards.length <= 1 || keyboard === this.currentKeyboard;
-    const shouldMessUp = messUp || !isMyTurn;
 
     // Track modifier keys
     if (key === "KEY_LEFTCTRL" || key === "KEY_RIGHTCTRL") {
@@ -136,8 +116,8 @@ export class EditorState {
     // Special actions
     if (this.ctrl && key === "KEY_ENTER") return "submit";
 
-    // If this is not our turn, and not a navigation key, press something random
-    if (shouldMessUp && !navigationKeys.has(key)) {
+    // If messing up and not a navigation key, press something random
+    if (messUp && !navigationKeys.has(key)) {
       const choices = [
         ...Object.keys(layout.normal),
         ...Object.keys(layout.shifted),
@@ -150,7 +130,7 @@ export class EditorState {
     }
 
     switch (key) {
-      // Navigation and editing keys
+      // Navigation keys
       case "KEY_LEFT":
         if (this.col > 0) {
           this.col--;
@@ -158,7 +138,7 @@ export class EditorState {
           this.row--;
           this.col = this.line.length;
         }
-        return true;
+        return "navigate";
       case "KEY_RIGHT":
         if (this.col < this.line.length) {
           this.col++;
@@ -166,70 +146,67 @@ export class EditorState {
           this.row++;
           this.col = 0;
         }
-        return true;
+        return "navigate";
       case "KEY_UP":
         if (this.row > 0) {
           this.row--;
         } else {
           this.col = 0;
         }
-        return true;
+        return "navigate";
       case "KEY_DOWN":
         if (this.row < this.code.length - 1) {
           this.row++;
         }
-        return true;
+        return "navigate";
       case "KEY_HOME":
         if (this.ctrl) {
           this.row = 0;
         }
         this.col = 0;
-        return true;
+        return "navigate";
       case "KEY_END":
         if (this.ctrl) {
           this.row = this.code.length - 1;
         }
         this.col = this.line.length;
-        return true;
+        return "navigate";
       case "KEY_PAGEUP":
         this.row = 0;
         this.col = 0;
-        return true;
+        return "navigate";
       case "KEY_PAGEDOWN":
         this.row = this.code.length - 1;
         this.col = this.line.length;
-        return true;
+        return "navigate";
+
+      // Editing keys
       case "KEY_BACKSPACE":
         if (this.realCol > 0) {
           this.line.splice(this.realCol - 1, 1);
           this.col--;
-          if (isMyTurn) this.advanceTurn();
         } else if (this.row > 0) {
           const [currLine] = this.code.splice(this.row, 1);
           this.row--;
           this.col = this.line.length;
           this.line = this.line.concat(currLine);
-          if (isMyTurn) this.advanceTurn();
         }
-        return true;
+        return "edit";
       case "KEY_DELETE":
         if (this.shift) return false; // ignore shift+delete, usually means "cut"
 
         if (this.realCol < this.line.length) {
           this.line.splice(this.realCol, 1);
-          if (isMyTurn) this.advanceTurn();
         } else if (this.row < this.code.length - 1) {
           const [nextLine] = this.code.splice(this.row + 1, 1);
           this.line = this.line.concat(nextLine);
-          if (isMyTurn) this.advanceTurn();
         }
-        return true;
+        return "edit";
       case "KEY_ENTER": {
         this.code.splice(this.row + 1, 0, this.line.splice(this.realCol));
         this.row++;
         this.col = 0;
-        if (isMyTurn) this.advanceTurn();
-        return true;
+        return "edit";
       }
 
       // Regular character input
@@ -246,8 +223,8 @@ export class EditorState {
             ? layout.shifted[name]
             : layout.normal[name];
 
-        // When "pressing something dumb", ignore AltGrs that don't produce a character
-        if (shouldMessUp && this.altGr && !char) {
+        // When messing up, ignore AltGrs that don't produce a character
+        if (messUp && this.altGr && !char) {
           char = this.shift ? layout.shifted[name] : layout.normal[name];
         }
 
@@ -255,8 +232,7 @@ export class EditorState {
           this.line.splice(this.realCol, 0, char);
           this.col++;
           this.col = this.realCol;
-          if (isMyTurn) this.advanceTurn(); // Only advance if it was the correct keyboard
-          return true;
+          return "edit";
         }
         return false;
       }

@@ -14,6 +14,36 @@ import websockets.asyncio.server
 import websockets.exceptions
 
 
+class KeyMessage(typing.TypedDict):
+    type: typing.Literal["key"]
+    port: str
+    state: str
+    key: str
+
+
+class KeyboardListMessage(typing.TypedDict):
+    type: typing.Literal["keyboards"]
+    keyboards: list[str]
+
+
+class KeyboardChangeMessage(typing.TypedDict):
+    type: typing.Literal["keyboard"]
+    port: str
+    action: typing.Literal["added", "removed"]
+
+
+class ErrorMessage(typing.TypedDict):
+    type: typing.Literal["error"]
+    error: str
+
+
+type WsMessage = KeyMessage | KeyboardListMessage | ErrorMessage
+
+
+async def send(websocket: websockets.asyncio.server.ServerConnection, message: WsMessage):
+    await websocket.send(json.dumps(message), True)
+
+
 def is_keyboard(device: pyudev.Device) -> bool:
     return (
         "ID_INPUT_KEYBOARD" in device.properties
@@ -51,7 +81,7 @@ states = {
 def kbd_handler(
     addqueue: queue.Queue,
     port_to_dev: dict[str, evdev.InputDevice],
-    enqueue: typing.Callable[[tuple[str, str, str]], None],
+    enqueue: typing.Callable[[KeyMessage | KeyboardChangeMessage], None],
     done: asyncio.Event,
 ):
     fd_to_dev = dict[int, evdev.InputDevice]()
@@ -76,15 +106,13 @@ def kbd_handler(
 
                 dev = evdev.InputDevice(device)
                 caps = dev.capabilities()
-                if (
-                    evdev.ecodes.EV_KEY in caps
-                    and evdev.ecodes.KEY_A in caps[evdev.ecodes.EV_KEY]
-                ):
+                if evdev.ecodes.EV_KEY in caps and evdev.ecodes.KEY_A in caps[evdev.ecodes.EV_KEY]:
                     print(f"Keyboard found: {dev.path} - {port} - {dev.name}")
                     fd_to_dev[dev.fd] = dev
                     fd_to_port[dev.fd] = port
                     port_to_dev[port] = dev
                     current_paths.add(dev.path)
+                    enqueue({"type": "keyboard", "port": port, "action": "added"})
         except queue.Empty:
             pass
 
@@ -103,15 +131,16 @@ def kbd_handler(
                         case evdev.KeyEvent() as key_event:
                             # print(f"Key {states[key_event.keystate]}: {key_event.keycode} on {port}")
                             enqueue(
-                                (
-                                    port,
-                                    states[key_event.keystate],
-                                    (
+                                {
+                                    "type": "key",
+                                    "port": port,
+                                    "state": states[key_event.keystate],
+                                    "key": (
                                         ",".join(key_event.keycode)
                                         if isinstance(key_event.keycode, tuple)
                                         else key_event.keycode
                                     ),
-                                )
+                                }
                             )
             except OSError as e:
                 if e.errno == 19:  # No such device
@@ -120,6 +149,7 @@ def kbd_handler(
                     fd_to_port.pop(fd)
                     fd_to_dev.pop(fd).close()
                     current_paths.remove(keyboard.path)
+                    enqueue({"type": "keyboard", "port": port, "action": "removed"})
 
 
 async def ws_handler(
@@ -143,21 +173,17 @@ async def ws_handler(
                     device = port_to_device.get(port)
                 except Exception:
                     traceback.print_exc()
-                    await websocket.send(json.dumps({"error": "failed to parse"}), True)
+                    await send(websocket, {"type": "error", "error": "failed to parse"})
                 else:
                     try:
                         if device:
                             for led, state in enumerate(msg[1:]):
                                 device.set_led(led, state)
                         else:
-                            await websocket.send(
-                                json.dumps({"error": "no such device"}), True
-                            )
+                            await send(websocket, {"type": "error", "error": "no such device"})
                     except Exception:
                         traceback.print_exc()
-                        await websocket.send(
-                            json.dumps({"error": "failed to set"}), True
-                        )
+                        await send(websocket, {"type": "error", "error": "failed to set"})
         except websockets.exceptions.ConnectionClosed:
             pass  # Normal disconnect (page reload, tab close, etc.)
         except Exception:
@@ -172,10 +198,10 @@ async def ws_handler(
     # Send list of already connected keyboards
     keyboards = list(port_to_device.keys())
     print(f"Sending keyboard list to client: {keyboards}")
-    await websocket.send(json.dumps({"type": "keyboards", "keyboards": keyboards}), True)
+    await send(websocket, {"type": "keyboards", "keyboards": keyboards})
 
     while event := await kbdqueue.get():
-        await websocket.send(json.dumps(list(event)), True)
+        await send(websocket, event)
 
 
 async def main():
@@ -191,7 +217,7 @@ async def main():
     port_to_device = dict[str, evdev.InputDevice]()
     udevqueue = queue.Queue()
 
-    def enqueue(msg: tuple[str, str, str]):
+    def enqueue(msg: KeyMessage | KeyboardChangeMessage):
         def do():
             for client in broadcast:
                 client.put_nowait(msg)
@@ -205,9 +231,7 @@ async def main():
         port=6969,
     )
 
-    kbd_thread = threading.Thread(
-        target=kbd_handler, args=(udevqueue, port_to_device, enqueue, done)
-    )
+    kbd_thread = threading.Thread(target=kbd_handler, args=(udevqueue, port_to_device, enqueue, done))
     kbd_thread.start()
 
     udev_thread = threading.Thread(target=udev_handler, args=(udevqueue, done))
