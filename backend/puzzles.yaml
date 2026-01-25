@@ -113,3 +113,54 @@
     3628800
     1
     5040
+
+- id: bogosort
+  title: Bogosort
+  description: |
+    Implement the Bogosort algorithm to sort a list of integers. The function must modify the list in place.
+
+    Bogosorting a list works by shuffling the list until it is sorted. You may not modify the list other than random.shuffle().
+  template: |
+    from random import shuffle
+
+    def bogosort(lst):
+      # Your code here
+      |
+  wrapper: |
+    class ListWrapper(list):
+      def make_wrapper(f):
+        import inspect, functools
+        @functools.wraps(f)
+        def wrapper(self, *args, **kwargs):
+          if inspect.stack()[1].f_code.co_qualname != "Random.shuffle":
+            raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
+          return f(self, *args, **kwargs)
+        return wrapper
+
+      __setitem__ = make_wrapper(list.__setitem__)
+      __delitem__ = make_wrapper(list.__delitem__)
+      append = make_wrapper(list.append)
+      extend = make_wrapper(list.extend)
+      insert = make_wrapper(list.insert)
+      pop = make_wrapper(list.pop)
+      remove = make_wrapper(list.remove)
+      clear = make_wrapper(list.clear)
+      sort = make_wrapper(list.sort)
+      reverse = make_wrapper(list.reverse)
+
+    lst1 = [3, 2, 5, 1, 4]
+    bogosort(lst1)
+    print(lst1)
+
+    lst2 = [10, -1, 2, 0, 5]
+    bogosort(lst2)
+    print(lst2)
+
+    lst3 = [1]
+    bogosort(lst3)
+    print(lst3)
+  expected_output: |
+    [1, 2, 3, 4, 5]
+    [-1, 0, 2, 5, 10]
+    [1]
+
