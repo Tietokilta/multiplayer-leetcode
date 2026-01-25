@@ -7,7 +7,7 @@ from logging import DEBUG, INFO, basicConfig, getLogger
 from os import environ
 from pathlib import Path
 from subprocess import PIPE, STDOUT
-from typing import AsyncGenerator, Literal, NotRequired, TypedDict
+from typing import AsyncGenerator, Literal, Never, NotRequired, TypedDict, cast
 
 import aiosqlite
 from inotify_simple import Event as InotifyEvent, INotify, flags
@@ -17,6 +17,49 @@ from yaml import safe_load
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+
+
+class LoginCmd(TypedDict):
+    type: Literal["login"]
+    id: str
+
+
+class EditCmd(TypedDict):
+    type: Literal["edit"]
+    code: str
+    row: int
+    col: int
+
+
+class SubmitCmd(TypedDict):
+    type: Literal["submit"]
+
+
+class AdminLoginCmd(TypedDict):
+    type: Literal["admin_login"]
+    password: str
+
+
+class AdminPlayerCmd(TypedDict):
+    type: Literal["add_player"] | Literal["remove_player"]
+    name: str
+
+
+class AdminSpectateCmd(TypedDict):
+    type: Literal["spectate"]
+    players: list[str]
+
+
+class AdminPuzzleCmd(TypedDict):
+    type: Literal["change_puzzle"]
+    puzzle: str
+
+
+class AdminReloadPuzzlesCmd(TypedDict):
+    type: Literal["reload_puzzles"]
+
+
+type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd
 
 
 class WelcomeMessage(TypedDict):
@@ -94,6 +137,7 @@ class SpectateStateMessage(TypedDict):
     type: Literal["spectate_state"]
     player: str
     state: Literal["running", "valid", "invalid"]
+    error: NotRequired[str]
 
 
 class SpectateOutputMessage(TypedDict):
@@ -215,7 +259,7 @@ class Player:
     col: int
     row: int
     conn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    tx_queue: asyncio.Queue | None = None
+    tx_queue: asyncio.Queue[WsMessage | None] | None = None
 
     def editor_json(self) -> PlayerJson:
         """Returns the current editor state as JSON."""
@@ -231,7 +275,7 @@ class Player:
         if self.tx_queue:
             self.tx_queue.put_nowait(message)
 
-    async def tx_queue_task(self, queue: asyncio.Queue, ws: ServerConnection):
+    async def tx_queue_task(self, queue: asyncio.Queue[WsMessage | None], ws: ServerConnection):
         """Task to send messages coming into the tx_queue to the player's websocket."""
         try:
             while True:
@@ -254,7 +298,7 @@ class Player:
             # Disconnect previous connection if exists
             if self.tx_queue:
                 self.tx_queue.put_nowait(None)
-            self.tx_queue = queue = asyncio.Queue()
+            self.tx_queue = queue = asyncio.Queue[WsMessage | None]()
         asyncio.create_task(self.tx_queue_task(queue, ws))
 
 
@@ -286,7 +330,7 @@ class Submission:
     output: str = ""
     status: Literal["running", "valid", "invalid"] = "running"
     error: str = ""
-    task: asyncio.Task | None = None
+    task: asyncio.Task[None] | None = None
 
 
 class AdminConnection:
@@ -374,24 +418,7 @@ class PlayerManager:
                 if self.current_puzzle == submission.puzzle:
                     player.send(result)
                     # Notify spectating admins
-                    if result["type"] == "output":
-                        self.notify_spectators(
-                            player.name,
-                            {
-                                "type": "spectate_output",
-                                "player": player.name,
-                                "content": result["content"],
-                            },
-                        )
-                    elif result["type"] == "state":
-                        self.notify_spectators(
-                            player.name,
-                            {
-                                "type": "spectate_state",
-                                "player": player.name,
-                                "state": result["state"],
-                            },
-                        )
+                    self.notify_spectators(player.name, result)
         finally:
             # Ensure no ghost states
             if submission.status == "running":
@@ -434,7 +461,7 @@ class PlayerManager:
         log.info("Reloading puzzles from puzzles.yaml")
         try:
             data = safe_load(open("puzzles.yaml", "r", encoding="utf-8"))
-            puzzles = {}
+            puzzles: dict[str, Puzzle] = {}
             for entry in data:
                 start_code = entry["template"].partition("|")[0]
                 start_row = start_code.count("\n")
@@ -482,16 +509,42 @@ class PlayerManager:
         data = json.dumps(message)
         for admin in self.admins.values():
             try:
+                # TODO: use queue tasks like with players
                 asyncio.create_task(admin.ws.send(data, True))
             except Exception:
                 pass  # Ignore send errors
 
-    def notify_spectators(self, player_name: str, message: WsMessage):
+    def notify_spectators(self, player_name: str, message: CodeRunOutput | CodeRunState | EditCmd):
         """Sends a message to all admins spectating a specific player."""
-        data = json.dumps(message)
+
+        converted: WsMessage
+        if message["type"] == "output":
+            converted = {
+                **message,
+                "type": "spectate_output",
+                "player": player_name,
+            }
+        elif message["type"] == "state":
+            converted = {
+                **message,
+                "type": "spectate_state",
+                "player": player_name,
+            }
+        elif message["type"] == "edit":
+            converted = {
+                **message,
+                "type": "spectate_editor",
+                "player": player_name,
+            }
+        else:
+            _: Never = message
+            raise ValueError("notify_spectators passed invalid message type")
+
+        data = json.dumps(converted)
         for admin in self.admins.values():
             if player_name in admin.spectating:
                 try:
+                    # TODO: use queue tasks like with players
                     asyncio.create_task(admin.ws.send(data, True))
                 except Exception:
                     pass
@@ -546,12 +599,11 @@ async def ws_handler(
     try:
         async for message in ws:
             try:
-                msg = json.loads(message)
-                action = msg["type"]
+                msg: WsCmd = json.loads(message)
 
                 # Admin actions
                 if admin_conn:
-                    if action == "spectate":
+                    if msg["type"] == "spectate":
                         # Set which players to spectate
                         players = msg.get("players", [])
                         admin_conn.spectating = set(players) & set(manager.players.keys())
@@ -577,6 +629,7 @@ async def ws_handler(
                                         "type": "spectate_state",
                                         "player": name,
                                         "state": sub.status,
+                                        "error": sub.error,
                                     },
                                 )
                                 await send(
@@ -587,54 +640,47 @@ async def ws_handler(
                                         "content": sub.output,
                                     },
                                 )
-                    elif action == "change_puzzle":
+                    elif msg["type"] == "change_puzzle":
                         log.info(f"Admin changing puzzle to {msg['puzzle']}")
                         if error := await manager.switch_puzzle(msg["puzzle"]):
                             await send(ws, error)
                         else:
                             # Send updated puzzle list with new current
                             await send(ws, manager.get_puzzle_list())
-                    elif action == "add_player":
+                    elif msg["type"] == "add_player":
                         if error := await manager.add_player(msg["name"]):
                             await send(ws, error)
-                    elif action == "remove_player":
+                    elif msg["type"] == "remove_player":
                         if error := await manager.remove_player(msg["name"]):
                             await send(ws, error)
-                    elif action == "reload_puzzles":
+                    elif msg["type"] == "reload_puzzles":
                         await manager.reload_puzzles()
                         await send(ws, manager.get_puzzle_list())
                     else:
                         await send(ws, {"type": "error", "message": "unknown admin action"})
 
                 # Player actions
-                elif player:
-                    if action == "edit":
+                elif player is not None or cast(bool, False):  # pyright thinks player is None...
+                    assert player is not None
+                    if msg["type"] == "edit":
                         if "code" in msg:
                             player.code = msg["code"]
                         player.row = msg["row"]
                         player.col = msg["col"]
                         manager.unsaved.add(player.name)
                         # Notify spectating admins
-                        manager.notify_spectators(
-                            player.name,
-                            {
-                                "type": "spectate_editor",
-                                "player": player.name,
-                                "code": player.code,
-                                "row": player.row,
-                                "col": player.col,
-                            },
-                        )
-                    elif action == "submit":
+                        manager.notify_spectators(player.name, msg)
+                    elif msg["type"] == "submit":
+                        log.info(f"Player {player.name} submitting code")
                         if error := manager.submit(player):
                             await send(ws, error)
                     else:
-                        log.warning(f"Unknown action from player {player.name}: {action}")
+                        log.warning(f"Unknown action from player {player.name}: {msg['type']}")
                         await send(ws, {"type": "error", "message": "unknown action"})
                         break  # just dump the connection
 
                 # Login as admin
-                elif action == "admin_login":
+                elif msg["type"] == "admin_login":
                     if msg["password"] == ADMIN_PASSWORD:
                         log.info("Admin logged in")
                         admin_conn = AdminConnection(ws)
@@ -649,7 +695,7 @@ async def ws_handler(
                         break  # just dump the connection
 
                 # Login as player
-                elif action == "login":
+                elif msg["type"] == "login":
                     name = msg["id"]
                     player_or_err = await manager.player_connected(name, ws)
                     if not isinstance(player_or_err, Player):
@@ -671,7 +717,7 @@ async def ws_handler(
 
                 # Unknown action, not logged in
                 else:
-                    log.warning(f"Unknown action before login: {action}")
+                    log.warning(f"Unknown action before login: {msg['type']}")
                     await send(ws, {"type": "error", "message": "not logged in"})
                     break  # just dump the connection
             except WebSocketException:
@@ -683,6 +729,7 @@ async def ws_handler(
                 break  # just dump the connection
     finally:
         # Clean up admin connection
+        # TODO: make manager clean up instead of poking its internals
         if admin_conn and ws in manager.admins:
             del manager.admins[ws]
             log.info("Admin disconnected")
@@ -723,7 +770,8 @@ async def watch_puzzles_file(manager: PlayerManager, done: asyncio.Event):
         while not done.is_set():
             # Use run_in_executor to make blocking inotify.read() async-friendly
             events: list[InotifyEvent] = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: inotify.read(timeout=200, read_delay=100)
+                None,
+                lambda: inotify.read(timeout=200, read_delay=100),
             )
             for event in events:
                 if event.name == puzzles_path.name:
@@ -792,6 +840,8 @@ if __name__ == "__main__":
     if not ADMIN_PASSWORD:
         raise RuntimeError("ADMIN_PASSWORD environment variable not set")
 
-    basicConfig(level=DEBUG if environ.get("DEBUG") else INFO)
+    basicConfig(level=INFO)
+    if environ.get("DEBUG"):
+        log.setLevel(DEBUG)
 
     asyncio.run(main())
