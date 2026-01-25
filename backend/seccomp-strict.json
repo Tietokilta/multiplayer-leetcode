@@ -56,6 +56,7 @@
         "fstat",
         "fstatat",
         "newfstatat",
+        "statx",
         "getcwd",
         "getdents64",
         "getdents",
