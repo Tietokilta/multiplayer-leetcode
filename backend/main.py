@@ -1,17 +1,18 @@
 import asyncio
-from dataclasses import dataclass, field
 import json
-from logging import getLogger, basicConfig, DEBUG, INFO
-from os import environ
 import signal
-from subprocess import PIPE, STDOUT
 import traceback
-from typing import Literal, AsyncGenerator, TypedDict, NotRequired
+from dataclasses import dataclass, field
+from logging import DEBUG, INFO, basicConfig, getLogger
+from os import environ
+from pathlib import Path
+from subprocess import PIPE, STDOUT
+from typing import AsyncGenerator, Literal, NotRequired, TypedDict
 
 import aiosqlite
-from websockets import WebSocketException, ServerConnection, serve
+from inotify_simple import Event as InotifyEvent, INotify, flags
+from websockets import ServerConnection, WebSocketException, serve
 from yaml import safe_load
-
 
 log = getLogger(__name__)
 
@@ -40,6 +41,7 @@ class ActionError(TypedDict):
 
 class PuzzleJson(TypedDict):
     """A puzzle to be shown to the player."""
+
     type: Literal["puzzle"]
     title: str
     description: str
@@ -47,6 +49,7 @@ class PuzzleJson(TypedDict):
 
 class PlayerJson(TypedDict):
     """The current state of a player's code editor, sent on startup."""
+
     type: Literal["editor"]
     code: str
     row: int
@@ -55,12 +58,14 @@ class PlayerJson(TypedDict):
 
 class PuzzleListItem(TypedDict):
     """A puzzle in the puzzle list."""
+
     id: str
     title: str
 
 
 class PuzzleListMessage(TypedDict):
     """List of available puzzles sent to admin."""
+
     type: Literal["puzzles"]
     puzzles: list[PuzzleListItem]
     current: str | None
@@ -68,12 +73,14 @@ class PuzzleListMessage(TypedDict):
 
 class PlayerListMessage(TypedDict):
     """List of players sent to admin."""
+
     type: Literal["players"]
     players: list[str]
 
 
 class SpectateMessage(TypedDict):
     """Editor state update for a specific player, sent to spectating admin."""
+
     type: Literal["spectate_editor"]
     player: str
     code: str
@@ -83,6 +90,7 @@ class SpectateMessage(TypedDict):
 
 class SpectateStateMessage(TypedDict):
     """Submission state update for a specific player, sent to spectating admin."""
+
     type: Literal["spectate_state"]
     player: str
     state: Literal["running", "valid", "invalid"]
@@ -90,6 +98,7 @@ class SpectateStateMessage(TypedDict):
 
 class SpectateOutputMessage(TypedDict):
     """Submission output for a specific player, sent to spectating admin."""
+
     type: Literal["spectate_output"]
     player: str
     content: str
@@ -282,6 +291,7 @@ class Submission:
 
 class AdminConnection:
     """Tracks an admin WebSocket connection and what they're spectating."""
+
     def __init__(self, ws: ServerConnection):
         self.ws = ws
         self.spectating: set[str] = set()  # player names being spectated
@@ -312,8 +322,14 @@ class PlayerManager:
         await player.connected(ws)
         return player
 
-    async def switch_puzzle(self, id: str) -> ActionError | None:
-        """Changes the current puzzle to the given one."""
+    async def switch_puzzle(self, id: str, reset_editors: bool = True) -> ActionError | None:
+        """Changes the current puzzle to the given one.
+
+        Args:
+            id: The puzzle ID to switch to.
+            reset_editors: If True, reset all player editors to the puzzle template.
+                           If False, only send updated puzzle info without resetting editors.
+        """
         if id not in self.puzzles:
             return {"type": "error", "message": "No such puzzle"}
         puzzle = self.puzzles[id]
@@ -340,12 +356,14 @@ class PlayerManager:
                     status=row[3],
                 )
         for player in self.players.values():
-            player.code = puzzle.template
-            player.col = puzzle.start_pos[0]
-            player.row = puzzle.start_pos[1]
-            self.unsaved.add(player.name)
+            if reset_editors:
+                player.code = puzzle.template
+                player.col = puzzle.start_pos[0]
+                player.row = puzzle.start_pos[1]
+                self.unsaved.add(player.name)
             player.send(puzzle.json())
-            player.send(player.editor_json())
+            if reset_editors:
+                player.send(player.editor_json())
         return None
 
     async def _submit_task(self, player: Player, submission: Submission) -> None:
@@ -357,17 +375,23 @@ class PlayerManager:
                     player.send(result)
                     # Notify spectating admins
                     if result["type"] == "output":
-                        self.notify_spectators(player.name, {
-                            "type": "spectate_output",
-                            "player": player.name,
-                            "content": result["content"],
-                        })
+                        self.notify_spectators(
+                            player.name,
+                            {
+                                "type": "spectate_output",
+                                "player": player.name,
+                                "content": result["content"],
+                            },
+                        )
                     elif result["type"] == "state":
-                        self.notify_spectators(player.name, {
-                            "type": "spectate_state",
-                            "player": player.name,
-                            "state": result["state"],
-                        })
+                        self.notify_spectators(
+                            player.name,
+                            {
+                                "type": "spectate_state",
+                                "player": player.name,
+                                "state": result["state"],
+                            },
+                        )
         finally:
             # Ensure no ghost states
             if submission.status == "running":
@@ -400,14 +424,12 @@ class PlayerManager:
         ):
             return {"type": "error", "message": "Submission already running"}
 
-        self.submissions[player.name] = submission = Submission(
-            puzzle=self.current_puzzle, code=player.code
-        )
+        self.submissions[player.name] = submission = Submission(puzzle=self.current_puzzle, code=player.code)
         submission.task = asyncio.create_task(self._submit_task(player, submission))
         # Don't bother saving here - if the server crashes during execution, just resubmit
         return None
 
-    def reload_puzzles(self):
+    async def reload_puzzles(self):
         """Reloads puzzles from puzzles.yaml."""
         log.info("Reloading puzzles from puzzles.yaml")
         try:
@@ -426,9 +448,19 @@ class PlayerManager:
         except Exception:
             log.exception("Failed to load puzzles")
         else:
+            old_puzzle = self.current_puzzle
             self.puzzles = puzzles
             # Notify admins of puzzle list change
             self.broadcast_to_admins(self.get_puzzle_list())
+            # If current puzzle changed, resend its info to users
+            if old_puzzle and old_puzzle.id in puzzles:
+                new_puzzle = puzzles[old_puzzle.id]
+                # Check if anything changed
+                if old_puzzle != new_puzzle:
+                    # Reset editors only if template or start position changed
+                    reset_editors = old_puzzle.template != new_puzzle.template
+                    log.info(f"Current puzzle '{old_puzzle.id}' changed, resending (reset_editors={reset_editors})")
+                    await self.switch_puzzle(old_puzzle.id, reset_editors=reset_editors)
 
     def get_puzzle_list(self) -> PuzzleListMessage:
         """Returns the list of available puzzles for admin."""
@@ -527,25 +559,34 @@ async def ws_handler(
                         # Send current state of all spectated players
                         for name in admin_conn.spectating:
                             p = manager.players[name]
-                            await send(ws, {
-                                "type": "spectate_editor",
-                                "player": name,
-                                "code": p.code,
-                                "row": p.row,
-                                "col": p.col,
-                            })
+                            await send(
+                                ws,
+                                {
+                                    "type": "spectate_editor",
+                                    "player": name,
+                                    "code": p.code,
+                                    "row": p.row,
+                                    "col": p.col,
+                                },
+                            )
                             # Send submission state if exists
                             if sub := manager.submissions.get(name):
-                                await send(ws, {
-                                    "type": "spectate_state",
-                                    "player": name,
-                                    "state": sub.status,
-                                })
-                                await send(ws, {
-                                    "type": "spectate_output",
-                                    "player": name,
-                                    "content": sub.output,
-                                })
+                                await send(
+                                    ws,
+                                    {
+                                        "type": "spectate_state",
+                                        "player": name,
+                                        "state": sub.status,
+                                    },
+                                )
+                                await send(
+                                    ws,
+                                    {
+                                        "type": "spectate_output",
+                                        "player": name,
+                                        "content": sub.output,
+                                    },
+                                )
                     elif action == "change_puzzle":
                         log.info(f"Admin changing puzzle to {msg['puzzle']}")
                         if error := await manager.switch_puzzle(msg["puzzle"]):
@@ -560,7 +601,7 @@ async def ws_handler(
                         if error := await manager.remove_player(msg["name"]):
                             await send(ws, error)
                     elif action == "reload_puzzles":
-                        manager.reload_puzzles()
+                        await manager.reload_puzzles()
                         await send(ws, manager.get_puzzle_list())
                     else:
                         await send(ws, {"type": "error", "message": "unknown admin action"})
@@ -574,13 +615,16 @@ async def ws_handler(
                         player.col = msg["col"]
                         manager.unsaved.add(player.name)
                         # Notify spectating admins
-                        manager.notify_spectators(player.name, {
-                            "type": "spectate_editor",
-                            "player": player.name,
-                            "code": player.code,
-                            "row": player.row,
-                            "col": player.col,
-                        })
+                        manager.notify_spectators(
+                            player.name,
+                            {
+                                "type": "spectate_editor",
+                                "player": player.name,
+                                "code": player.code,
+                                "row": player.row,
+                                "col": player.col,
+                            },
+                        )
                     elif action == "submit":
                         if error := manager.submit(player):
                             await send(ws, error)
@@ -668,6 +712,29 @@ async def save_players_periodically(manager: PlayerManager, done: asyncio.Event)
             await manager.db.commit()
 
 
+async def watch_puzzles_file(manager: PlayerManager, done: asyncio.Event):
+    """Watches puzzles.yaml for changes and reloads puzzles when modified."""
+    puzzles_path = Path("puzzles.yaml")
+    inotify = INotify()
+    watch_flags = flags.MODIFY | flags.CLOSE_WRITE | flags.MOVED_TO
+    wd = inotify.add_watch(str(puzzles_path.parent), watch_flags)
+
+    try:
+        while not done.is_set():
+            # Use run_in_executor to make blocking inotify.read() async-friendly
+            events: list[InotifyEvent] = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: inotify.read(timeout=200, read_delay=100)
+            )
+            for event in events:
+                if event.name == puzzles_path.name:
+                    log.info("puzzles.yaml changed, reloading...")
+                    await manager.reload_puzzles()
+                    break  # Only reload once per batch of events
+    finally:
+        inotify.rm_watch(wd)
+        inotify.close()
+
+
 async def main():
     loop = asyncio.get_event_loop()
     done = asyncio.Event()
@@ -678,8 +745,7 @@ async def main():
     loop.add_signal_handler(signal.SIGINT, on_shutdown)
 
     db = await aiosqlite.connect("state.db")
-    await db.executescript(
-        """
+    await db.executescript("""
         CREATE TABLE IF NOT EXISTS players (
             name VARCHAR(15) PRIMARY KEY NOT NULL,
             score INTEGER NOT NULL DEFAULT 0,
@@ -698,23 +764,24 @@ async def main():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (player_name) REFERENCES players(name)
         );
-        """
-    )
+    """)
     await db.commit()
 
     player_manager = PlayerManager(db)
     await player_manager.load_players()
-    player_manager.reload_puzzles()
+    await player_manager.reload_puzzles()
 
     save_players = asyncio.create_task(save_players_periodically(player_manager, done))
+    watch_puzzles = asyncio.create_task(watch_puzzles_file(player_manager, done))
 
     server = await serve(lambda ws: ws_handler(ws, player_manager), "localhost", 6979)
 
     async with server:
         await done.wait()
 
-    # Wait for saving to finish
+    # Wait for background tasks to finish
     await save_players
+    await watch_puzzles
 
 
 if __name__ == "__main__":

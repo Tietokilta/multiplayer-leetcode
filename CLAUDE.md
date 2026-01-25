@@ -56,6 +56,8 @@ cd backend
 uv sync                           # Install dependencies
 ADMIN_PASSWORD=xxx uv run main.py # Start server (requires Docker)
 DEBUG=1 ADMIN_PASSWORD=xxx uv run main.py  # With debug logging
+uvx black .                       # Run Black formatter
+uvx isort .                       # Run isort
 ```
 
 ### evdev-ws (Linux only)
@@ -63,6 +65,8 @@ DEBUG=1 ADMIN_PASSWORD=xxx uv run main.py  # With debug logging
 cd evdev-ws
 uv sync
 sudo uv run main.py  # Requires root for evdev access
+uvx black .          # Run Black formatter
+uvx isort .          # Run isort
 ```
 
 ## Key Concepts
