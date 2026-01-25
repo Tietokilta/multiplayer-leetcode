@@ -249,7 +249,7 @@ class PlayerManager:
 
     async def load_players(self) -> None:
         """Loads players from the database into memory."""
-        async with self.db.execute("SELECT id, name, score, code, col, row FROM players") as cursor:
+        async with self.db.execute("SELECT name, score, code, col, row FROM players") as cursor:
             for row in await cursor.fetchall():
                 player = Player(*row)
                 self.players[player.name] = player
@@ -355,7 +355,7 @@ class PlayerManager:
                 start_row = start_code.count("\n")
                 start_col = len(start_code.rpartition("\n")[2])
                 puzzle = Puzzle(
-                    **entry,
+                    **{k: v for k, v in entry.items() if k not in ("template", "start_pos")},
                     template=entry["template"].replace("|", ""),
                     start_pos=(start_col, start_row),
                 )
