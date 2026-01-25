@@ -47,7 +47,7 @@ export class EditorState {
   }
 
   getCode() {
-    return this.code.join("\n");
+    return this.code.map(line => line.join("")).join("\n");
   }
 
   render(): ReactNode {

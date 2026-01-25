@@ -38,6 +38,7 @@ class GameServerHandler {
   queuedSubmit: boolean = false;
   handleState: ((state: ConnState, error: boolean) => void) | null = null;
   handleMessage: ((data: GameServerMessage) => void) | null = null;
+  ip: string = "";
 
   send(cmd: GameServerCmd) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
@@ -53,6 +54,7 @@ class GameServerHandler {
     console.log("Connecting to game server at", ip);
     this.handleState?.("connecting", false);
     this.active = true;
+    this.ip = ip;
     this.socket = new WebSocket(`ws://${ip}:6979/`);
     this.socket.addEventListener("open", () => {
       console.log("Game server connection opened");
@@ -77,7 +79,7 @@ class GameServerHandler {
       // Reconnect if mounted
       if (event.target === this.socket) {
         this.socket = null;
-        if (this.active) this.timeout = window.setTimeout(() => this.connect(this.socket!.url), 1000);
+        if (this.active) this.timeout = window.setTimeout(() => this.connect(this.ip), 1000);
       }
     });
   }
@@ -308,7 +310,12 @@ function App() {
     );
   }
 
-  return <>{connState}</>;
+  return (
+    <>
+      {connState}
+      <div className="mt-5">{rendered}</div>
+    </>
+  );
 }
 
 export default App;
