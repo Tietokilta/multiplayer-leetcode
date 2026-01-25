@@ -38,7 +38,6 @@ class GameServerHandler {
   queuedSubmit: boolean = false;
   handleState: ((state: ConnState, error: boolean) => void) | null = null;
   handleMessage: ((data: GameServerMessage) => void) | null = null;
-  ip: string = "";
 
   send(cmd: GameServerCmd) {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
@@ -54,7 +53,6 @@ class GameServerHandler {
     console.log("Connecting to game server at", ip);
     this.handleState?.("connecting", false);
     this.active = true;
-    this.ip = ip;
     this.socket = new WebSocket(`ws://${ip}:6979/`);
     this.socket.addEventListener("open", () => {
       console.log("Game server connection opened");
@@ -79,7 +77,6 @@ class GameServerHandler {
       // Reconnect if mounted
       if (event.target === this.socket) {
         this.socket = null;
-        if (this.active) this.timeout = window.setTimeout(() => this.connect(this.ip), 1000);
       }
     });
   }
@@ -163,7 +160,7 @@ function App() {
   const [myIdInput, setMyIdInput] = useState(myId);
 
   const [serverIp, setServerIp] = useLocalStorage("multiplayer-leetcode-server-ip", "");
-  const [serverIpError, setServerIpError] = useLocalStorage("multiplayer-leetcode-server-ip-error", false);
+  const [serverIpError, setServerIpError] = useState(false);
   const [serverIpInput, setServerIpInput] = useState(serverIp);
 
   const [allowLocalKeyboard, setAllowLocalKeyboard] = useLocalStorage("multiplayer-leetcode-allow-local", false);
