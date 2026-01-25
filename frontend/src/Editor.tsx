@@ -1,8 +1,26 @@
 import type { ReactNode } from "react";
 import { finnishLayout, type KeyboardLayout } from "./keyboards";
 
-// Finnish layout
+// Most keys map from KeyboardEvent.code to evdev key names just by uppercasing and
+// prepending "KEY_", but some need special handling:
+const keyMapping: Record<string, string> = {
+  ArrowLeft: "KEY_LEFT",
+  ArrowRight: "KEY_RIGHT",
+  ArrowUp: "KEY_UP",
+  ArrowDown: "KEY_DOWN",
+  ControlLeft: "KEY_LEFTCTRL",
+  ControlRight: "KEY_RIGHTCTRL",
+  ShiftLeft: "KEY_LEFTSHIFT",
+  ShiftRight: "KEY_RIGHTSHIFT",
+  AltRight: "KEY_RIGHTALT",
+  BracketLeft: "KEY_LEFTBRACE",
+  BracketRight: "KEY_RIGHTBRACE",
+  Period: "KEY_DOT",
+  Quote: "KEY_APOSTROPHE",
+  IntlBackslash: "KEY_102ND",
+};
 
+// These keys cannot be "messed up" and are always active
 const navigationKeys = new Set([
   "KEY_LEFT",
   "KEY_RIGHT",
@@ -48,6 +66,7 @@ export class EditorState {
             );
           })}
           {isCursorLine && this.col >= line.length && <span className="bg-white text-black"> </span>}
+          {!isCursorLine && line.length === 0 && <span>&nbsp;</span>}
         </div>
       );
     });
@@ -63,6 +82,14 @@ export class EditorState {
 
   get realCol() {
     return Math.min(this.col, this.line.length);
+  }
+
+  actLocal(evt: KeyboardEvent, messUp: boolean = false) {
+    // Map KeyboardEvent.code to evdev key names
+    const key = keyMapping[evt.code] || `KEY_${evt.code.replace(/^Key|^Digit/, "").toUpperCase()}`;
+    // Map event type to state
+    const state = evt.type === "keyup" ? "up" : evt.repeat ? "hold" : "down";
+    return this.act("local", key, state, messUp);
   }
 
   act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false) {
@@ -195,8 +222,8 @@ export class EditorState {
             ? layout.shiftedAltGr[name]
             : layout.altGr[name]
           : this.shift
-          ? layout.shifted[name]
-          : layout.normal[name];
+            ? layout.shifted[name]
+            : layout.normal[name];
 
         // When "pressing something dumb", ignore AltGrs that don't produce a character
         if (messUp && this.altGr && !char) {

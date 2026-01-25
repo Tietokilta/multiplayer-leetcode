@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { EditorState } from "./Editor";
 
@@ -164,6 +164,8 @@ function App() {
   const [serverIpError, setServerIpError] = useLocalStorage("multiplayer-leetcode-server-ip-error", false);
   const [serverIpInput, setServerIpInput] = useState(serverIp);
 
+  const [allowLocalKeyboard, setAllowLocalKeyboard] = useLocalStorage("multiplayer-leetcode-allow-local", false);
+
   const [editor] = useState(() => new EditorState(example));
   const [rendered, setRendered] = useState<ReactNode>(editor.render());
 
@@ -173,23 +175,45 @@ function App() {
   const [keyboardConnected, setKeyboardConnected] = useState<ConnState>("not");
   const [gameConnected, setGameConnected] = useState<ConnState>("not");
 
-  useEffect(() => {
-    keyboardServer.handleState = setKeyboardConnected;
-    keyboardServer.handleMessage = ([keyboard, state, key]: KeyboardServerMessage) => {
-      const action = editor.act(keyboard, key, state);
+  const handleEditorAction = useCallback(
+    (action: boolean | "submit") => {
       if (action === true) {
         setRendered(editor.render());
         gameServer.send({ type: "edit", code: editor.getCode(), row: editor.row, col: editor.col });
       } else if (action === "submit") {
         gameServer.send({ type: "submit" });
       }
+    },
+    [editor, gameServer],
+  );
+
+  useEffect(() => {
+    if (!allowLocalKeyboard) return;
+
+    const handleKeyEvent = (evt: KeyboardEvent) => {
+      const action = editor.actLocal(evt);
+      handleEditorAction(action);
+    };
+    window.addEventListener("keydown", handleKeyEvent);
+    window.addEventListener("keyup", handleKeyEvent);
+    return () => {
+      window.removeEventListener("keydown", handleKeyEvent);
+      window.removeEventListener("keyup", handleKeyEvent);
+    };
+  }, [allowLocalKeyboard, editor, handleEditorAction]);
+
+  useEffect(() => {
+    keyboardServer.handleState = setKeyboardConnected;
+    keyboardServer.handleMessage = ([keyboard, state, key]: KeyboardServerMessage) => {
+      const action = editor.act(keyboard, key, state);
+      handleEditorAction(action);
     };
     keyboardServer.connect();
 
     return () => {
       keyboardServer.disconnect();
     };
-  }, [keyboardServer, editor, gameServer]);
+  }, [keyboardServer, editor, handleEditorAction]);
 
   useEffect(() => {
     if (!myId || !serverIp || serverIpError) return;
@@ -254,6 +278,17 @@ function App() {
             onChange={(e) => setServerIpInput(e.target.value)}
             placeholder="1.2.3.4"
           />
+        </div>
+        <div className="m-3">
+          <label>
+            <input
+              type="checkbox"
+              checked={allowLocalKeyboard}
+              onChange={(e) => setAllowLocalKeyboard(e.target.checked)}
+              className="mr-2"
+            />
+            Enable local keyboard input
+          </label>
         </div>
         <div className="m-3">
           <button
