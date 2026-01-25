@@ -1,8 +1,15 @@
-import { useEffect, useState, useRef } from "react";
-
-type ConnState = "connected" | "not" | "connecting";
+import { useEffect, useState } from "react";
+import { type ConnState, stateColors, GameServerHandler } from "./connection";
 
 type PuzzleInfo = { id: string; title: string };
+
+type AdminCmd =
+  | { type: "admin_login"; password: string }
+  | { type: "spectate"; players: string[] }
+  | { type: "change_puzzle"; puzzle: string }
+  | { type: "add_player"; name: string }
+  | { type: "remove_player"; name: string }
+  | { type: "reload_puzzles" };
 
 type AdminMessage =
   | { type: "admin_welcome" }
@@ -21,17 +28,13 @@ type PlayerState = {
   output: string;
 };
 
-const stateColors = {
-  connected: "bg-green-500",
-  not: "bg-red-500",
-  connecting: "bg-yellow-500",
-};
-
 const submissionColors = {
   running: "text-yellow-500",
   valid: "text-green-500",
   invalid: "text-red-500",
 };
+
+/* eslint-disable react-hooks/immutability -- I'm lazy af */
 
 export default function Admin() {
   const [serverIp, setServerIp] = useState("");
@@ -48,37 +51,18 @@ export default function Admin() {
 
   const [newPlayerName, setNewPlayerName] = useState("");
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const ipRef = useRef<string>("");
+  const [server] = useState(() => new GameServerHandler<AdminCmd, AdminMessage>());
 
-  const send = (msg: object) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(msg));
-    }
-  };
-
-  const connect = (ip: string) => {
-    setConnState("connecting");
+  const connect = (ip: string, pwd: string) => {
     setError(null);
 
-    const ws = new WebSocket(`ws://${ip}:6979/`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setConnState("connected");
-      ws.send(JSON.stringify({ type: "admin_login", password }));
-    };
-
-    ws.onmessage = (event) => {
-      const data: AdminMessage = JSON.parse(event.data);
+    server.handleState = setConnState;
+    server.handleLogin = setLoggedIn;
+    server.handleError = setError;
+    server.handleMessage = (data) => {
       console.log("Admin received:", data);
 
       switch (data.type) {
-        case "admin_welcome":
-          setLoggedIn(true);
-          // Only enable auto-reconnect after successful login
-          ipRef.current = ip;
-          break;
         case "puzzles":
           setPuzzles(data.puzzles);
           setCurrentPuzzle(data.current);
@@ -108,7 +92,7 @@ export default function Admin() {
               row: prev[data.player]?.row ?? 0,
               col: prev[data.player]?.col ?? 0,
               state: data.state,
-              output: data.state === "running" ? "" : prev[data.player]?.output ?? "",
+              output: data.state === "running" ? "" : (prev[data.player]?.output ?? ""),
             },
           }));
           break;
@@ -125,29 +109,14 @@ export default function Admin() {
             },
           }));
           break;
-        case "error":
-          setError(data.message);
-          break;
       }
     };
 
-    ws.onclose = () => {
-      setConnState("not");
-      setLoggedIn(false);
-      // Reconnect after delay if we were logged in
-      if (ipRef.current) {
-        setTimeout(() => {
-          if (ipRef.current) connect(ipRef.current);
-        }, 2000);
-      }
-    };
+    server.connect(ip, { type: "admin_login", password: pwd });
   };
 
   const disconnect = () => {
-    ipRef.current = "";
-    wsRef.current?.close();
-    wsRef.current = null;
-    setLoggedIn(false);
+    server.disconnect();
     setConnState("not");
   };
 
@@ -166,29 +135,29 @@ export default function Admin() {
   // Send spectate command when selection changes
   useEffect(() => {
     if (loggedIn) {
-      send({ type: "spectate", players: Array.from(spectating) });
+      server.send({ type: "spectate", players: Array.from(spectating) });
     }
-  }, [spectating, loggedIn]);
+  }, [spectating, loggedIn, server]);
 
   const changePuzzle = (puzzleId: string) => {
-    send({ type: "change_puzzle", puzzle: puzzleId });
+    server.send({ type: "change_puzzle", puzzle: puzzleId });
   };
 
   const addPlayer = () => {
     if (newPlayerName.trim()) {
-      send({ type: "add_player", name: newPlayerName.trim() });
+      server.send({ type: "add_player", name: newPlayerName.trim() });
       setNewPlayerName("");
     }
   };
 
   const removePlayer = (name: string) => {
     if (confirm(`Remove player "${name}"?`)) {
-      send({ type: "remove_player", name });
+      server.send({ type: "remove_player", name });
     }
   };
 
   const reloadPuzzles = () => {
-    send({ type: "reload_puzzles" });
+    server.send({ type: "reload_puzzles" });
   };
 
   // Login form
@@ -222,7 +191,7 @@ export default function Admin() {
         <button
           className="bg-blue-500 text-white rounded p-2 w-full disabled:opacity-50"
           disabled={!serverIp || !password || connState === "connecting"}
-          onClick={() => connect(serverIp)}
+          onClick={() => connect(serverIp, password)}
         >
           Connect
         </button>
@@ -304,32 +273,20 @@ export default function Admin() {
           <div className="max-h-40 overflow-y-auto">
             {players.map((name) => (
               <label key={name} className="flex items-center gap-2 py-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={spectating.has(name)}
-                  onChange={() => toggleSpectate(name)}
-                />
+                <input type="checkbox" checked={spectating.has(name)} onChange={() => toggleSpectate(name)} />
                 <span>{name}</span>
                 {playerStates[name]?.state && (
-                  <span className={submissionColors[playerStates[name].state!]}>
-                    ({playerStates[name].state})
-                  </span>
+                  <span className={submissionColors[playerStates[name].state!]}>({playerStates[name].state})</span>
                 )}
               </label>
             ))}
           </div>
           {players.length > 0 && (
             <div className="mt-2 flex gap-2">
-              <button
-                className="text-blue-500 text-sm underline"
-                onClick={() => setSpectating(new Set(players))}
-              >
+              <button className="text-blue-500 text-sm underline" onClick={() => setSpectating(new Set(players))}>
                 All
               </button>
-              <button
-                className="text-blue-500 text-sm underline"
-                onClick={() => setSpectating(new Set())}
-              >
+              <button className="text-blue-500 text-sm underline" onClick={() => setSpectating(new Set())}>
                 None
               </button>
             </div>
@@ -345,11 +302,7 @@ export default function Admin() {
             <div key={name} className="border rounded p-2">
               <div className="flex justify-between items-center mb-1">
                 <span className="font-bold">{name}</span>
-                {state?.state && (
-                  <span className={submissionColors[state.state]}>
-                    {state.state}
-                  </span>
-                )}
+                {state?.state && <span className={submissionColors[state.state]}>{state.state}</span>}
               </div>
               <pre className="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-auto max-h-60 font-mono whitespace-pre">
                 {state?.code ?? "(no data)"}

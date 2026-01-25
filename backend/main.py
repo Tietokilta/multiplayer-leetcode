@@ -304,10 +304,10 @@ class PlayerManager:
                 player = Player(*row)
                 self.players[player.name] = player
 
-    async def player_connected(self, name: str, ws: ServerConnection) -> Player:
+    async def player_connected(self, name: str, ws: ServerConnection) -> Player | ActionError:
         """Adds a player connecting via websocket."""
         if name not in self.players:
-            raise ValueError("No such player")
+            return {"type": "error", "message": "No such player"}
         player = self.players[name]
         await player.connected(ws)
         return player
@@ -607,7 +607,13 @@ async def ws_handler(
                 # Login as player
                 elif action == "login":
                     name = msg["id"]
-                    player = await manager.player_connected(name, ws)
+                    player_or_err = await manager.player_connected(name, ws)
+                    if not isinstance(player_or_err, Player):
+                        log.warning(f"Invalid player login attempt: {name}")
+                        await send(ws, player_or_err)  # send error
+                        break  # just dump the connection
+                    player = player_or_err
+                    log.info(f"Player logged in: {name}")
                     await send(ws, {"type": "welcome"})
                     # Send current puzzle, if any
                     if puzzle := manager.current_puzzle:

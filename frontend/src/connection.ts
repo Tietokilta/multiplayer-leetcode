@@ -1,0 +1,114 @@
+export type ConnState = "connected" | "not" | "connecting";
+
+export const stateColors: Record<ConnState, string> = {
+  connected: "bg-green-500",
+  not: "bg-red-500",
+  connecting: "bg-yellow-500",
+};
+
+export class GameServerHandler<TCmd extends { type: string }, TMsg extends { type: string }> {
+  active: boolean = false;
+  hasOpened: boolean = false;
+  loggedIn: boolean = false;
+  socket: WebSocket | null = null;
+  timeout?: number;
+
+  // Queue for commands sent while disconnected
+  queuedEdit: TCmd | null = null;
+  queuedSubmit: TCmd | null = null;
+
+  handleState: ((state: ConnState) => void) | null = null;
+  handleLogin: ((loggedIn: boolean) => void) | null = null;
+  handleError: ((message: string) => void) | null = null;
+  handleMessage: ((data: TMsg) => void) | null = null;
+
+  send(cmd: TCmd) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(cmd));
+    } else if (cmd.type === "edit") {
+      this.queuedEdit = cmd;
+    } else if (cmd.type === "submit") {
+      this.queuedSubmit = cmd;
+    }
+  }
+
+  connect(ip: string, loginCmd: TCmd) {
+    console.log("Connecting to game server at", ip);
+    this.handleState?.("connecting");
+    this.active = true;
+    this.socket = new WebSocket(`ws://${ip}:6979/`);
+
+    this.socket.addEventListener("open", () => {
+      console.log("Game server connection opened");
+      this.hasOpened = true;
+      this.handleState?.("connected");
+      this.onOpen(loginCmd);
+    });
+
+    this.socket.addEventListener("message", (event: MessageEvent) => {
+      const data: TMsg = JSON.parse(event.data);
+
+      // Handle login responses
+      if (data.type === "welcome" || data.type === "admin_welcome") {
+        this.loggedIn = true;
+        this.onLogin();
+      } else if (data.type === "error") {
+        this.handleError?.((data as TMsg & { message: string }).message);
+      }
+
+      this.handleMessage?.(data);
+    });
+
+    this.socket.addEventListener("close", (event: CloseEvent) => {
+      console.log("Game server connection closed:", event.code);
+      const connectError = !event.wasClean && !this.hasOpened;
+      if (connectError) {
+        this.handleError?.("Failed to connect to server");
+      }
+      if (this.loggedIn) {
+        this.loggedIn = false;
+        this.handleLogin?.(false);
+      } else {
+        // Disconnect, failed before login
+        this.disconnect();
+      }
+      this.handleState?.("not");
+      // Reconnect if still mounted and was logged in
+      if (event.target === this.socket) {
+        this.socket = null;
+        if (this.active) this.timeout = window.setTimeout(() => this.connect(ip, loginCmd), 1000);
+      }
+    });
+  }
+
+  protected onOpen(loginCmd: TCmd) {
+    // Send login command
+    if (loginCmd) {
+      this.socket!.send(JSON.stringify(loginCmd));
+    }
+  }
+
+  protected onLogin() {
+    this.handleLogin?.(true);
+    // Flush queued commands
+    if (this.queuedEdit) {
+      this.socket!.send(JSON.stringify(this.queuedEdit));
+      this.queuedEdit = null;
+    }
+    if (this.queuedSubmit) {
+      this.socket!.send(JSON.stringify(this.queuedSubmit));
+      this.queuedSubmit = null;
+    }
+  }
+
+  disconnect() {
+    this.active = false;
+    this.hasOpened = false;
+    this.loggedIn = false;
+    this.queuedEdit = null;
+    this.queuedSubmit = null;
+    this.socket?.close();
+    this.socket = null;
+    clearTimeout(this.timeout);
+  }
+}
