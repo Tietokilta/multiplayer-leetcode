@@ -20,7 +20,9 @@ type PlayerMessage =
 type KeyboardServerCmd = [keyboardId: string, numLock: 0 | 1, capsLock: 0 | 1, scrollLock: 0 | 1];
 
 type KeyState = "down" | "up" | "hold";
-type KeyboardServerMessage = [keyboardId: string, state: KeyState, key: string];
+type KeyboardServerKeyMessage = [keyboardId: string, state: KeyState, key: string];
+type KeyboardServerInitMessage = { type: "keyboards"; keyboards: string[] };
+type KeyboardServerMessage = KeyboardServerKeyMessage | KeyboardServerInitMessage;
 
 class KeyboardServerHandler {
   active: boolean = false;
@@ -50,6 +52,7 @@ class KeyboardServerHandler {
     });
     this.socket.addEventListener("message", (event: MessageEvent) => {
       const data = JSON.parse(event.data);
+      console.log("Keyboard server message:", data);
       this.handleMessage?.(data);
     });
     this.socket.addEventListener("close", (event: CloseEvent) => {
@@ -93,10 +96,12 @@ function App() {
   const [serverIpError, setServerIpError] = useLocalStorage("multiplayer-leetcode-server-ip-error", "");
   const [serverIpInput, setServerIpInput] = useState(serverIp);
 
-  const [allowLocalKeyboard, setAllowLocalKeyboard] = useLocalStorage("multiplayer-leetcode-allow-local", false);
+  const [debugMode, setDebugMode] = useLocalStorage("multiplayer-leetcode-debug-mode", false);
 
   const [editor] = useState(() => new EditorState(example));
   const [rendered, setRendered] = useState<ReactNode>(editor.render());
+  const [currentKeyboard, setCurrentKeyboard] = useState<string | undefined>(undefined);
+  const [keyboardList, setKeyboardList] = useState<string[]>([]);
 
   const [keyboardServer] = useState(() => new KeyboardServerHandler());
   const [gameServer] = useState(() => new GameServerHandler<PlayerCmd, PlayerMessage>());
@@ -108,6 +113,8 @@ function App() {
     (action: boolean | "submit") => {
       if (action === true) {
         setRendered(editor.render());
+        setCurrentKeyboard(editor.currentKeyboard);
+        setKeyboardList([...editor.seenKeyboards]);
         gameServer.send({ type: "edit", code: editor.getCode(), row: editor.row, col: editor.col });
       } else if (action === "submit") {
         gameServer.send({ type: "submit" });
@@ -117,24 +124,22 @@ function App() {
   );
 
   useEffect(() => {
-    if (!allowLocalKeyboard) return;
-
-    const handleKeyEvent = (evt: KeyboardEvent) => {
-      const action = editor.actLocal(evt);
-      handleEditorAction(action);
-    };
-    window.addEventListener("keydown", handleKeyEvent);
-    window.addEventListener("keyup", handleKeyEvent);
-    return () => {
-      window.removeEventListener("keydown", handleKeyEvent);
-      window.removeEventListener("keyup", handleKeyEvent);
-    };
-  }, [allowLocalKeyboard, editor, handleEditorAction]);
-
-  useEffect(() => {
     keyboardServer.handleState = setKeyboardConnected;
-    keyboardServer.handleMessage = ([keyboard, state, key]: KeyboardServerMessage) => {
-      const action = editor.act(keyboard, key, state);
+    keyboardServer.handleMessage = (msg: KeyboardServerMessage) => {
+      // Initial keyboard list from server
+      if (!Array.isArray(msg) && msg.type === "keyboards") {
+        for (const kb of msg.keyboards) {
+          if (!editor.seenKeyboards.includes(kb)) {
+            editor.seenKeyboards.push(kb);
+          }
+        }
+        setKeyboardList([...editor.seenKeyboards]);
+        setCurrentKeyboard(editor.currentKeyboard);
+        return;
+      }
+      // Key event - pass debugMode to disable cycling
+      const [keyboard, state, key] = msg as KeyboardServerKeyMessage;
+      const action = editor.act(keyboard, key, state, false, debugMode);
       handleEditorAction(action);
     };
     keyboardServer.connect();
@@ -142,7 +147,7 @@ function App() {
     return () => {
       keyboardServer.disconnect();
     };
-  }, [keyboardServer, editor, handleEditorAction]);
+  }, [keyboardServer, editor, handleEditorAction, debugMode]);
 
   useEffect(() => {
     if (!myId || !serverIp || serverIpError) return;
@@ -209,11 +214,11 @@ function App() {
           <label>
             <input
               type="checkbox"
-              checked={allowLocalKeyboard}
-              onChange={(e) => setAllowLocalKeyboard(e.target.checked)}
+              checked={debugMode}
+              onChange={(e) => setDebugMode(e.target.checked)}
               className="mr-2"
             />
-            Enable local keyboard input
+            Debug mode (disable keyboard cycling)
           </label>
         </div>
         <div className="m-3">
@@ -237,6 +242,14 @@ function App() {
   return (
     <>
       {connState}
+      <div className="m-3 font-mono text-sm">
+        <div className="mb-2">Keyboards ({keyboardList.length}):</div>
+        {keyboardList.map((kb, i) => (
+          <div key={kb} className={`${kb === currentKeyboard ? "text-green-400 font-bold" : "text-gray-500"}`}>
+            {i + 1}. {kb} {kb === currentKeyboard && "← TURN"}
+          </div>
+        ))}
+      </div>
       <div className="mt-5">{rendered}</div>
     </>
   );

@@ -11,6 +11,7 @@ import typing
 import evdev
 import pyudev
 import websockets.asyncio.server
+import websockets.exceptions
 
 
 def is_keyboard(device: pyudev.Device) -> bool:
@@ -69,7 +70,9 @@ def kbd_handler(
                 else:
                     port = "not_usb"
 
-                assert port not in port_to_dev
+                # Skip if we already have a device on this port
+                if port in port_to_dev:
+                    continue
 
                 dev = evdev.InputDevice(device)
                 caps = dev.capabilities()
@@ -98,9 +101,7 @@ def kbd_handler(
                     event = evdev.categorize(event)
                     match event:
                         case evdev.KeyEvent() as key_event:
-                            print(
-                                f"Key {states[key_event.keystate]}: {key_event.keycode} on {port}"
-                            )
+                            # print(f"Key {states[key_event.keystate]}: {key_event.keycode} on {port}")
                             enqueue(
                                 (
                                     port,
@@ -157,15 +158,21 @@ async def ws_handler(
                         await websocket.send(
                             json.dumps({"error": "failed to set"}), True
                         )
+        except websockets.exceptions.ConnectionClosed:
+            pass  # Normal disconnect (page reload, tab close, etc.)
         except Exception:
             traceback.print_exc()
-        else:
-            print(f"WebSocket disconnected from {websocket.remote_address}")
         finally:
+            print(f"WebSocket disconnected from {websocket.remote_address}")
             clients.remove(kbdqueue)
             kbdqueue.put_nowait(None)
 
     asyncio.create_task(receive())
+
+    # Send list of already connected keyboards
+    keyboards = list(port_to_device.keys())
+    print(f"Sending keyboard list to client: {keyboards}")
+    await websocket.send(json.dumps({"type": "keyboards", "keyboards": keyboards}), True)
 
     while event := await kbdqueue.get():
         await websocket.send(json.dumps(list(event)), True)

@@ -33,7 +33,7 @@ const navigationKeys = new Set([
 ]);
 
 export class EditorState {
-  seenKeyboards: Set<string> = new Set();
+  seenKeyboards: string[] = [];
   layouts: Map<string, KeyboardLayout> = new Map();
   code: string[][];
   row: number = 0;
@@ -41,9 +41,22 @@ export class EditorState {
   ctrl: boolean = false;
   shift: boolean = false;
   altGr: boolean = false;
+  
+  // Cycling: which keyboard's turn is it?
+  currentTurnIndex: number = 0;
 
   constructor(code: string = "") {
     this.code = code.split("\n").map((line) => line.split(""));
+  }
+
+  get currentKeyboard(): string | undefined {
+    return this.seenKeyboards[this.currentTurnIndex];
+  }
+
+  advanceTurn() {
+    if (this.seenKeyboards.length > 0) {
+      this.currentTurnIndex = (this.currentTurnIndex + 1) % this.seenKeyboards.length;
+    }
   }
 
   getCode() {
@@ -92,9 +105,16 @@ export class EditorState {
     return this.act("local", key, state, messUp);
   }
 
-  act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false) {
-    this.seenKeyboards.add(keyboard);
+  act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false, noCycling: boolean = false) {
+    // Register new keyboards in order
+    if (!this.seenKeyboards.includes(keyboard)) {
+      this.seenKeyboards.push(keyboard);
+    }
     const layout = this.layouts.get(keyboard) || finnishLayout;
+    
+    // Determine if this keyboard's turn (all keyboards valid until we have enough, or if noCycling mode)
+    const isMyTurn = noCycling || this.seenKeyboards.length <= 1 || keyboard === this.currentKeyboard;
+    const shouldMessUp = messUp || !isMyTurn;
 
     // Track modifier keys
     if (key === "KEY_LEFTCTRL" || key === "KEY_RIGHTCTRL") {
@@ -116,21 +136,17 @@ export class EditorState {
     // Special actions
     if (this.ctrl && key === "KEY_ENTER") return "submit";
 
-    // If this is not our turn, and not a navigation key, press something dumb
-    if (messUp && !navigationKeys.has(key)) {
+    // If this is not our turn, and not a navigation key, press something random
+    if (shouldMessUp && !navigationKeys.has(key)) {
       const choices = [
-        ...Object.keys({
-          ...layout.normal,
-          ...layout.shifted,
-          ...layout.altGr,
-          ...layout.shiftedAltGr,
-        }),
+        ...Object.keys(layout.normal),
+        ...Object.keys(layout.shifted),
         "BACKSPACE",
         "ENTER",
         "DELETE",
         "SPACE",
       ];
-      key = choices[Math.floor(Math.random() * choices.length)];
+      key = "KEY_" + choices[Math.floor(Math.random() * choices.length)];
     }
 
     switch (key) {
@@ -187,11 +203,13 @@ export class EditorState {
         if (this.realCol > 0) {
           this.line.splice(this.realCol - 1, 1);
           this.col--;
+          if (isMyTurn) this.advanceTurn();
         } else if (this.row > 0) {
           const [currLine] = this.code.splice(this.row, 1);
           this.row--;
           this.col = this.line.length;
           this.line = this.line.concat(currLine);
+          if (isMyTurn) this.advanceTurn();
         }
         return true;
       case "KEY_DELETE":
@@ -199,15 +217,18 @@ export class EditorState {
 
         if (this.realCol < this.line.length) {
           this.line.splice(this.realCol, 1);
+          if (isMyTurn) this.advanceTurn();
         } else if (this.row < this.code.length - 1) {
           const [nextLine] = this.code.splice(this.row + 1, 1);
           this.line = this.line.concat(nextLine);
+          if (isMyTurn) this.advanceTurn();
         }
         return true;
       case "KEY_ENTER": {
         this.code.splice(this.row + 1, 0, this.line.splice(this.realCol));
         this.row++;
         this.col = 0;
+        if (isMyTurn) this.advanceTurn();
         return true;
       }
 
@@ -226,7 +247,7 @@ export class EditorState {
             : layout.normal[name];
 
         // When "pressing something dumb", ignore AltGrs that don't produce a character
-        if (messUp && this.altGr && !char) {
+        if (shouldMessUp && this.altGr && !char) {
           char = this.shift ? layout.shifted[name] : layout.normal[name];
         }
 
@@ -234,6 +255,7 @@ export class EditorState {
           this.line.splice(this.realCol, 0, char);
           this.col++;
           this.col = this.realCol;
+          if (isMyTurn) this.advanceTurn(); // Only advance if it was the correct keyboard
           return true;
         }
         return false;
