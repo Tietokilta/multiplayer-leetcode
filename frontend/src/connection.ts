@@ -19,7 +19,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
 
   handleState: ((state: ConnState) => void) | null = null;
   handleLogin: ((loggedIn: boolean) => void) | null = null;
-  handleError: ((message: string) => void) | null = null;
+  handleLoginError: ((message: string) => void) | null = null;
   handleMessage: ((data: TMsg) => void) | null = null;
 
   send(cmd: TCmd) {
@@ -52,11 +52,11 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
       if (data.type === "welcome" || data.type === "admin_welcome") {
         this.loggedIn = true;
         this.onLogin();
-      } else if (data.type === "error") {
-        this.handleError?.((data as TMsg & { message: string }).message);
+      } else if (data.type === "error" && !this.loggedIn) {
+        this.handleLoginError?.((data as TMsg & { message: string }).message);
+      } else {
+        this.handleMessage?.(data);
       }
-
-      this.handleMessage?.(data);
     });
 
     this.socket.addEventListener("close", (event: CloseEvent) => {
@@ -66,7 +66,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
 
       const connectError = !event.wasClean && !this.hasOpened;
       if (connectError) {
-        this.handleError?.("Failed to connect to server");
+        this.handleLoginError?.("Failed to connect to server");
       }
       if (this.loggedIn) {
         this.loggedIn = false;

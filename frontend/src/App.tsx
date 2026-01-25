@@ -208,7 +208,7 @@ function App() {
     if (!myId || !serverIp || serverIpError) return;
 
     gameServer.handleState = setGameConnected;
-    gameServer.handleError = setServerIpError;
+    gameServer.handleLoginError = setServerIpError;
     gameServer.handleMessage = (data) => {
       console.log("Received message from game server:", data);
     };

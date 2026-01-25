@@ -42,6 +42,7 @@ export default function Admin() {
   const [password, setPassword] = useLocalStorage("leetcode-admin-password", "");
   const [connState, setConnState] = useState<ConnState>("not");
   const [loggedIn, setLoggedIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [puzzles, setPuzzles] = useState<PuzzleInfo[]>([]);
@@ -55,11 +56,12 @@ export default function Admin() {
   const [server] = useState(() => new GameServerHandler<AdminCmd, AdminMessage>());
 
   const connect = (ip: string, pwd: string) => {
+    setLoginError(null);
     setError(null);
 
     server.handleState = setConnState;
     server.handleLogin = setLoggedIn;
-    server.handleError = setError;
+    server.handleLoginError = setLoginError;
     server.handleMessage = (data) => {
       console.log("Admin received:", data);
 
@@ -176,7 +178,7 @@ export default function Admin() {
           <span className={`w-3 h-3 rounded-full inline-block mr-2 ${stateColors[connState]}`} />
           <span className="text-sm">{connState}</span>
         </div>
-        {error && <div className="text-red-500 mb-2">{error}</div>}
+        {loginError && <div className="text-red-500 mb-2">{loginError}</div>}
         <div className="mb-3">
           <input
             className="border rounded p-2 w-full"
