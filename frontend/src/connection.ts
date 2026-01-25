@@ -61,6 +61,9 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
 
     this.socket.addEventListener("close", (event: CloseEvent) => {
       console.log("Game server connection closed:", event.code);
+      // If disconnect() was already called, it has sent the changes and we can ignore the rest.
+      if (event.target !== this.socket) return;
+
       const connectError = !event.wasClean && !this.hasOpened;
       if (connectError) {
         this.handleError?.("Failed to connect to server");
@@ -109,6 +112,8 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
     this.queuedSubmit = null;
     this.socket?.close();
     this.socket = null;
+    this.handleLogin?.(false);
+    this.handleState?.("not");
     clearTimeout(this.timeout);
   }
 }
