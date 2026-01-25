@@ -9,3 +9,4 @@ venv/
 .vscode/
 
 state.db
+state.db-*
