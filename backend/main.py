@@ -745,7 +745,8 @@ async def main():
     loop.add_signal_handler(signal.SIGINT, on_shutdown)
 
     db = await aiosqlite.connect("state.db")
-    await db.executescript("""
+    await db.executescript(
+        """
         CREATE TABLE IF NOT EXISTS players (
             name VARCHAR(15) PRIMARY KEY NOT NULL,
             score INTEGER NOT NULL DEFAULT 0,
@@ -764,7 +765,8 @@ async def main():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (player_name) REFERENCES players(name)
         );
-    """)
+        """
+    )
     await db.commit()
 
     player_manager = PlayerManager(db)
@@ -782,6 +784,8 @@ async def main():
     # Wait for background tasks to finish
     await save_players
     await watch_puzzles
+
+    await db.close()
 
 
 if __name__ == "__main__":
