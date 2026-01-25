@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { type ConnState, stateColors, GameServerHandler } from "./connection";
+import { useLocalStorage } from "usehooks-ts";
 
 type PuzzleInfo = { id: string; title: string };
 
@@ -37,8 +38,8 @@ const submissionColors = {
 /* eslint-disable react-hooks/immutability -- I'm lazy af */
 
 export default function Admin() {
-  const [serverIp, setServerIp] = useState("");
-  const [password, setPassword] = useState("");
+  const [serverIp, setServerIp] = useLocalStorage("leetcode-admin-server-ip", "");
+  const [password, setPassword] = useLocalStorage("leetcode-admin-password", "");
   const [connState, setConnState] = useState<ConnState>("not");
   const [loggedIn, setLoggedIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +164,13 @@ export default function Admin() {
   // Login form
   if (!loggedIn) {
     return (
-      <div className="p-4 max-w-md mx-auto">
+      <form
+        className="p-4 max-w-md mx-auto"
+        onSubmit={(e) => {
+          e.preventDefault();
+          connect(serverIp, password);
+        }}
+      >
         <h1 className="text-2xl font-bold mb-4">Admin Login</h1>
         <div className="flex items-center mb-2">
           <span className={`w-3 h-3 rounded-full inline-block mr-2 ${stateColors[connState]}`} />
@@ -177,6 +184,7 @@ export default function Admin() {
             value={serverIp}
             onChange={(e) => setServerIp(e.target.value)}
             placeholder="Server IP (e.g. 127.0.0.1)"
+            autoFocus
           />
         </div>
         <div className="mb-3">
@@ -189,13 +197,13 @@ export default function Admin() {
           />
         </div>
         <button
+          type="submit"
           className="bg-blue-500 text-white rounded p-2 w-full disabled:opacity-50"
           disabled={!serverIp || !password || connState === "connecting"}
-          onClick={() => connect(serverIp, password)}
         >
           Connect
         </button>
-      </div>
+      </form>
     );
   }
 
@@ -204,9 +212,12 @@ export default function Admin() {
     <div className="p-4">
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
           <span className={`w-3 h-3 rounded-full inline-block ${stateColors[connState]}`} />
-          <button className="text-red-500 underline" onClick={disconnect}>
+          <button
+            className="text-red-500 underline p-2 rounded cursor-pointer hover:bg-red-500/25"
+            onClick={disconnect}
+          >
             Disconnect
           </button>
         </div>
@@ -234,7 +245,10 @@ export default function Admin() {
               ))}
             </select>
           </div>
-          <button className="text-blue-500 underline text-sm" onClick={reloadPuzzles}>
+          <button
+            className="text-blue-500 underline text-sm p-1 rounded cursor-pointer hover:bg-blue-500/25"
+            onClick={reloadPuzzles}
+          >
             Reload puzzles.yaml
           </button>
         </div>
@@ -251,7 +265,10 @@ export default function Admin() {
               placeholder="New player name"
               onKeyDown={(e) => e.key === "Enter" && addPlayer()}
             />
-            <button className="bg-green-500 text-white rounded px-2" onClick={addPlayer}>
+            <button
+              className="text-green-500 underline rounded px-2 py-1 cursor-pointer hover:bg-green-500/25"
+              onClick={addPlayer}
+            >
               Add
             </button>
           </div>
@@ -259,7 +276,10 @@ export default function Admin() {
             {players.map((name) => (
               <div key={name} className="flex justify-between items-center py-1">
                 <span>{name}</span>
-                <button className="text-red-500 text-sm" onClick={() => removePlayer(name)}>
+                <button
+                  className="text-red-500 underline text-sm p-1 rounded cursor-pointer hover:bg-red-500/25"
+                  onClick={() => removePlayer(name)}
+                >
                   Remove
                 </button>
               </div>
@@ -283,10 +303,16 @@ export default function Admin() {
           </div>
           {players.length > 0 && (
             <div className="mt-2 flex gap-2">
-              <button className="text-blue-500 text-sm underline" onClick={() => setSpectating(new Set(players))}>
+              <button
+                className="text-blue-500 underline text-sm p-1 rounded cursor-pointer hover:bg-blue-500/25"
+                onClick={() => setSpectating(new Set(players))}
+              >
                 All
               </button>
-              <button className="text-blue-500 text-sm underline" onClick={() => setSpectating(new Set())}>
+              <button
+                className="text-blue-500 underline text-sm p-1 rounded cursor-pointer hover:bg-blue-500/25"
+                onClick={() => setSpectating(new Set())}
+              >
                 None
               </button>
             </div>
