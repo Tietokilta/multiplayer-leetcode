@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { finnishLayout, type KeyboardLayout } from "./keyboards";
+import type { EditorMessage } from "./messages";
 
 // Most keys map from KeyboardEvent.code to evdev key names just by uppercasing and
 // prepending "KEY_", but some need special handling:
@@ -45,6 +46,12 @@ export class EditorState {
 
   constructor(code: string = "") {
     this.code = code.split("\n").map((line) => line.split(""));
+  }
+
+  load(status: EditorMessage) {
+    this.code = status.code.split("\n").map((line) => line.split(""));
+    this.row = status.row;
+    this.col = status.col;
   }
 
   getCode() {

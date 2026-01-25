@@ -10,28 +10,40 @@
 
 - id: sum
   title: Sum of Two Numbers
-  description: Write a function that takes two integers as input and prints their sum.
+  description: Write a function that takes two integers as input and returns their sum.
   template: |
     def sum_two_numbers(a, b):
       # Your code here
-      |
+      return |
   wrapper: |
-    sum_two_numbers(1, 1)
-    sum_two_numbers(2, 3)
-    sum_two_numbers(98234, 12342)
-    sum_two_numbers(0, 0)
-    sum_two_numbers(-5, 12)
+    {}
+
+    print("1 + 1 =")
+    print(sum_two_numbers(1, 1))
+    print("2 + 3 =")
+    print(sum_two_numbers(2, 3))
+    print("98234 + 12342 =")
+    print(sum_two_numbers(98234, 12342))
+    print("0 + 0 =")
+    print(sum_two_numbers(0, 0))
+    print("-5 + 12 =")
+    print(sum_two_numbers(-5, 12))
   expected_output: |
+    1 + 1 =
     2
+    2 + 3 =
     5
+    98234 + 12342 =
     110576
+    0 + 0 =
     0
+    -5 + 12 =
     7
 
 - id: fibonacci
   title: Fibonacci Sequence
   description: |
-    Write a function that prints the first N numbers in the Fibonacci sequence.
+    Write a function that *prints* the first N numbers in the Fibonacci sequence.
 
     The Fibonacci sequence starts with 1 and 1, and each subsequent number is the sum of the two preceding ones.
 
@@ -47,6 +59,8 @@
       # Your code here
       |
   wrapper: |
+    {}
+
     fibonacci(5)
     print()
     fibonacci(10)
@@ -96,22 +110,32 @@
 - id: factorial
   title: Factorial
   description: |
-    Write a function that prints the factorial of a given non-negative integer.
+    Write a function that returns the factorial of a given non-negative integer.
 
     The factorial of a number is the product of all positive integers less than or equal to that number; for example, the factorial of 5 is 5 × 4 × 3 × 2 × 1 = 120.
   template: |
     def factorial(n):
       # Your code here
-      |
+      return |
   wrapper: |
+    {}
+
+    print("5! =")
     print(factorial(5))
+    print("10! =")
     print(factorial(10))
+    print("1! =")
     print(factorial(1))
+    print("7! =")
     print(factorial(7))
   expected_output: |
+    5! =
     120
+    10! =
     3628800
+    1! =
     1
+    7! =
     5040
 
 - id: bogosort
@@ -127,6 +151,8 @@
       # Your code here
       |
   wrapper: |
+    {}
+
     class ListWrapper(list):
       def make_wrapper(f):
         import inspect, functools
@@ -148,19 +174,39 @@
       sort = make_wrapper(list.sort)
       reverse = make_wrapper(list.reverse)
 
-    lst1 = [3, 2, 5, 1, 4]
+    lst1 = ListWrapper([])
+    print(f"Sorting: {{lst1}}")
     bogosort(lst1)
     print(lst1)
 
-    lst2 = [10, -1, 2, 0, 5]
+    lst2 = ListWrapper([1])
+    print(f"Sorting: {{lst2}}")
     bogosort(lst2)
     print(lst2)
 
-    lst3 = [1]
+    lst3 = ListWrapper([3, 2, 5, 1, 4])
+    print(f"Sorting: {{lst3}}")
     bogosort(lst3)
     print(lst3)
-  expected_output: |
-    [1, 2, 3, 4, 5]
-    [-1, 0, 2, 5, 10]
-    [1]
 
+    lst4 = ListWrapper([10, -1, 2, 0, 5])
+    print(f"Sorting: {{lst4}}")
+    bogosort(lst4)
+    print(lst4)
+
+    import random
+    lst5 = ListWrapper([random.randint(-10, 10) for _ in range(random.randint(5, 7))])
+    print(f"Sorting a random list")
+    bogosort(lst5)
+    print("It's sorted!" if lst5 == sorted(lst5) else lst5)
+  expected_output: |
+    Sorting: []
+    []
+    Sorting: [1]
+    [1]
+    Sorting: [3, 2, 5, 1, 4]
+    [1, 2, 3, 4, 5]
+    Sorting: [10, -1, 2, 0, 5]
+    [-1, 0, 2, 5, 10]
+    Sorting a random list
+    It's sorted!

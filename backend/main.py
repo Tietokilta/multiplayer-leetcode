@@ -157,6 +157,8 @@ async def run_code(
     """
     Runs the given code in a restricted Docker container, yielding output and results incrementally.
     """
+    yield {"type": "state", "state": "running"}
+
     args = [
         "docker",
         "run",
@@ -194,6 +196,7 @@ async def run_code(
         "-c",
         code,
     ]
+    log.debug("Running code with args: %s", args)
     process = await asyncio.create_subprocess_exec(
         *args,
         stdin=PIPE,
@@ -221,6 +224,7 @@ async def run_code(
                     "type": "output",
                     "content": decoded,
                 }
+                log.debug(f"Process output: {decoded!r}")
                 submission.output += decoded
                 if len(submission.output) >= 100 * 1024:  # 100 KB limit
                     process.kill()
@@ -247,6 +251,7 @@ async def run_code(
                 submission.status = "valid"
             else:
                 submission.status = "invalid"
+                submission.error = "Output did not match expected result"
     finally:
         yield {"type": "state", "state": submission.status, "error": submission.error}
 
@@ -400,20 +405,33 @@ class PlayerManager:
                     status=row[3],
                 )
         for player in self.players.values():
+            existing_submission = None
             if reset_editors:
-                player.code = puzzle.template
-                player.col = puzzle.start_pos[0]
-                player.row = puzzle.start_pos[1]
+                if player.name in self.submissions:
+                    # Load existing valid submission
+                    existing_submission = self.submissions[player.name]
+                    player.code = existing_submission.code
+                    player.col = 0
+                    player.row = 0
+                else:
+                    # Reset to template
+                    player.code = puzzle.template
+                    player.col = puzzle.start_pos[0]
+                    player.row = puzzle.start_pos[1]
                 self.unsaved.add(player.name)
             player.send(puzzle.json())
             if reset_editors:
                 player.send(player.editor_json())
+                if existing_submission:
+                    player.send({"type": "state", "state": existing_submission.status})
+                    player.send({"type": "output", "content": existing_submission.output})
         return None
 
     async def _submit_task(self, player: Player, submission: Submission) -> None:
         """Task to run a player's submission and handle its results."""
         try:
-            async for result in run_code(player.code, "", submission):
+            full_code = submission.puzzle.wrapper.format(submission.code)
+            async for result in run_code(full_code, "", submission):
                 # Send outputs only if still on the same puzzle
                 if self.current_puzzle == submission.puzzle:
                     player.send(result)
@@ -423,6 +441,10 @@ class PlayerManager:
             # Ensure no ghost states
             if submission.status == "running":
                 submission.status = "invalid"
+
+            log.info(
+                f"Submission finished for player {player.name} with status {submission.status}, error: {submission.error}"
+            )
             # TODO: recalculate score based on time, attempts, etc?
             # Save submission to database
             await self.db.execute(
@@ -446,10 +468,11 @@ class PlayerManager:
             return {"type": "error", "message": "No puzzle loaded"}
 
         # Only allow one submission running or valid at a time
-        if (sub := self.submissions.get(player.name)) and not (
-            (sub.task and not sub.task.done()) or sub.status == "valid"
-        ):
+        previous = self.submissions.get(player.name)
+        if previous and previous.task and not previous.task.done():
             return {"type": "error", "message": "Submission already running"}
+        if previous and previous.status == "valid":
+            return {"type": "error", "message": "You have already submitted a valid solution"}
 
         self.submissions[player.name] = submission = Submission(puzzle=self.current_puzzle, code=player.code)
         submission.task = asyncio.create_task(self._submit_task(player, submission))
@@ -673,6 +696,7 @@ async def ws_handler(
                     elif msg["type"] == "submit":
                         log.info(f"Player {player.name} submitting code")
                         if error := manager.submit(player):
+                            log.info(f"Submission error for player {player.name}: {error['message']}")
                             await send(ws, error)
                     else:
                         log.warning(f"Unknown action from player {player.name}: {msg['type']}")

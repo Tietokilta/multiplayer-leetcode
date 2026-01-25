@@ -3,28 +3,14 @@ import { useLocalStorage } from "usehooks-ts";
 import { type ConnState, stateColors, GameServerHandler } from "./connection";
 import { EditorState, type EditorAction } from "./Editor";
 import { TurnTracker } from "./TurnTracker";
-
-type PlayerCmd =
-  | { type: "login"; id: string }
-  | { type: "edit"; code?: string; row: number; col: number }
-  | { type: "submit" };
-
-type PlayerMessage =
-  | { type: "welcome" }
-  | { type: "editor"; code: string; row: number; col: number }
-  | { type: "puzzle"; title: string; description: string }
-  | { type: "output"; content: string }
-  | { type: "state"; state: "running" | "valid" | "invalid"; error?: string }
-  | { type: "debuffs"; debuffs: string[] }
-  | { type: "error"; message: string };
-
-type KeyboardServerCmd = [keyboardId: string, numLock: 0 | 1, capsLock: 0 | 1, scrollLock: 0 | 1];
-
-type KeyState = "down" | "up" | "hold";
-type KeyboardServerMessage =
-  | { type: "key"; port: string; state: KeyState; key: string }
-  | { type: "keyboards"; keyboards: string[] }
-  | { type: "keyboard"; port: string; action: "added" | "removed" };
+import type {
+  KeyboardServerCmd,
+  KeyboardServerMessage,
+  PlayerCmd,
+  PlayerMessage,
+  PuzzleMessage,
+  StateMessage,
+} from "./messages";
 
 class KeyboardServerHandler {
   active: boolean = false;
@@ -54,7 +40,7 @@ class KeyboardServerHandler {
     });
     this.socket.addEventListener("message", (event: MessageEvent) => {
       const data = JSON.parse(event.data);
-      console.log("Keyboard server message:", data);
+      // console.log("Keyboard server message:", data);
       this.handleMessage?.(data);
     });
     this.socket.addEventListener("close", (event: CloseEvent) => {
@@ -118,6 +104,11 @@ function App() {
   const [editor] = useState(() => new EditorState(example));
   const [turnTracker] = useState(() => new TurnTracker());
   const [rendered, setRendered] = useState<ReactNode>(editor.render());
+
+  const [puzzle, setPuzzle] = useState<PuzzleMessage | null>(null);
+  const [output, setOutput] = useState<string>("");
+  const [submissionState, setSubmissionState] = useState<StateMessage["state"] | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const [currentKeyboard, setCurrentKeyboard] = useState<string | undefined>(undefined);
   const [keyboardList, setKeyboardList] = useState<string[]>([]);
@@ -185,6 +176,8 @@ function App() {
           setCurrentKeyboard(turnTracker.currentKeyboard);
           break;
         case "key": {
+          // Ignore events while window is not focused
+          if (!document.hasFocus()) return;
           // Key event
           const { port, state, key } = msg;
           turnTracker.registerKeyboard(port);
@@ -205,22 +198,50 @@ function App() {
   }, [keyboardServer]);
 
   useEffect(() => {
-    if (!myId || !serverIp || serverIpError) return;
-
     gameServer.handleState = setGameConnected;
     gameServer.handleLoginError = setServerIpError;
     gameServer.handleMessage = (data) => {
-      console.log("Received message from game server:", data);
+      switch (data.type) {
+        case "editor":
+          editor.load(data);
+          setRendered(editor.render());
+          break;
+        case "puzzle":
+          setPuzzle(data);
+          setOutput("");
+          setSubmissionState(null);
+          setSubmissionError(null);
+          break;
+        case "output":
+          setOutput((prev) => (data.first ? data.content : prev + data.content));
+          break;
+        case "state":
+          if (data.state === "running") setOutput("");
+          setSubmissionState(data.state);
+          setSubmissionError(data.error ?? null);
+          break;
+        case "error":
+          console.error("Game server error:", data.message);
+          setSubmissionError(data.message);
+          break;
+        default:
+          console.warn("Unhandled message from game server:", data);
+          break;
+      }
     };
-    gameServer.connect(serverIp, { type: "login", id: myId });
+  }, [gameServer, editor, setServerIpError]);
 
+  useEffect(() => {
+    if (!myId || !serverIp || serverIpError) return;
+
+    gameServer.connect(serverIp, { type: "login", id: myId });
     return () => {
       gameServer.disconnect();
     };
   }, [gameServer, myId, serverIp, serverIpError, setServerIpError]);
 
   const connState = (
-    <div className="absolute top-3 right-3 flex items-center">
+    <div className="absolute top-6 right-6 flex items-center">
       <span className={`w-4 h-4 rounded-full inline-block mr-2 ${stateColors[gameConnected]}`} />
       <span
         className="mr-2"
@@ -241,88 +262,126 @@ function App() {
     return (
       <>
         {connState}
-        <div className="m-3">Please set the team name and game server IP.</div>
-        {serverIpError && (
-          <div className="m-3 text-red-500">
-            Error connecting to server: "{serverIpError}" Please check the IP and try again.
+        <div className="m-4 border rounded p-4 flex flex-col gap-3">
+          <div>Please set the team name and game server IP.</div>
+          {serverIpError && (
+            <div className="m-3 text-red-500">
+              Error connecting to server: "{serverIpError}" Please check the IP and try again.
+            </div>
+          )}
+          <div>
+            <input
+              className="border-1 rounded p-1"
+              type="text"
+              value={myIdInput}
+              onChange={(e) => setMyIdInput(e.target.value)}
+              placeholder="TiK"
+            />
           </div>
-        )}
-        <div className="m-3">
-          <input
-            className="border-1 rounded p-1"
-            type="text"
-            value={myIdInput}
-            onChange={(e) => setMyIdInput(e.target.value)}
-            placeholder="TiK"
-          />
-        </div>
-        <div className="m-3">
-          <input
-            className="border-1 rounded p-1"
-            type="text"
-            value={serverIpInput}
-            onChange={(e) => setServerIpInput(e.target.value)}
-            placeholder="1.2.3.4"
-          />
-        </div>
-        <div className="m-3">
-          <label>
+          <div>
             <input
-              type="checkbox"
-              checked={allowLocalKeyboard}
-              onChange={(e) => setAllowLocalKeyboard(e.target.checked)}
-              className="mr-2"
+              className="border-1 rounded p-1"
+              type="text"
+              value={serverIpInput}
+              onChange={(e) => setServerIpInput(e.target.value)}
+              placeholder="1.2.3.4"
             />
-            Enable local keyboard input (for running without evdev-ws)
-          </label>
-        </div>
-        <div className="m-3">
-          <label>
-            <input
-              type="checkbox"
-              checked={showKeyboards}
-              onChange={(e) => setShowKeyboards(e.target.checked)}
-              className="mr-2"
-            />
-            Show detected keyboards
-          </label>
-        </div>
-        <div className="m-3">
-          <label>
-            <input
-              type="checkbox"
-              checked={ignoreWrongOrder}
-              onChange={(e) => setIgnoreWrongOrder(e.target.checked)}
-              className="mr-2"
-            />
-            Ignore turn order
-          </label>
-        </div>
-        <div className="m-3">
-          <button
-            className="border-1 rounded p-1 disabled:opacity-50"
-            disabled={!myIdInput || !serverIpInput}
-            onClick={() => {
-              setMyId(myIdInput);
-              setServerIp(serverIpInput);
-              setServerIpError("");
-            }}
-          >
-            Connect
-          </button>
+          </div>
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={allowLocalKeyboard}
+                onChange={(e) => setAllowLocalKeyboard(e.target.checked)}
+                className="mr-2"
+              />
+              Enable local keyboard input (for running without evdev-ws)
+            </label>
+          </div>
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={showKeyboards}
+                onChange={(e) => setShowKeyboards(e.target.checked)}
+                className="mr-2"
+              />
+              Show detected keyboards
+            </label>
+          </div>
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={ignoreWrongOrder}
+                onChange={(e) => setIgnoreWrongOrder(e.target.checked)}
+                className="mr-2"
+              />
+              Ignore turn order
+            </label>
+          </div>
+          <div>
+            <button
+              className="border-1 rounded p-1 disabled:opacity-50"
+              disabled={!myIdInput || !serverIpInput}
+              onClick={() => {
+                setMyId(myIdInput);
+                setServerIp(serverIpInput);
+                setServerIpError("");
+              }}
+            >
+              Connect
+            </button>
+          </div>
         </div>
         {showKeyboards && <KeyboardList current={currentKeyboard} keyboards={keyboardList} />}
-        <div className="mt-5">{rendered}</div>
+        <div className="m-4 border rounded p-4">
+          <h2 className="mb-2 font-bold text-lg">You can test the editor here:</h2>
+          {rendered}
+        </div>
       </>
     );
   }
 
   return (
-    <>
+    <div className="flex flex-col p-4 gap-4 h-screen">
       {connState}
       {showKeyboards && <KeyboardList current={currentKeyboard} keyboards={keyboardList} />}
-      <div className="mt-5">{rendered}</div>
-    </>
+      {puzzle ? (
+        <div className="border rounded p-4 flex flex-col gap-2">
+          <h2 className="font-bold text-xl">{puzzle.title}</h2>
+          {puzzle.description.split("\n\n").map((para, i) => (
+            <p key={i}>{para}</p>
+          ))}
+        </div>
+      ) : (
+        <div className="border rounded p-4 text-red-500">The server currently has no puzzle loaded.</div>
+      )}
+      <div className="grid grid-cols-2 gap-4 flex-grow">
+        <div className="border rounded p-4">
+          <h2 className="font-bold text-lg mb-2">Code</h2>
+          {rendered}
+        </div>
+        <div className="border rounded p-4">
+          {submissionState === null ||
+            (submissionState === "invalid" && (
+              <div className="text-blue-500 font-bold mb-2 animate-[pulse_ease_2s_infinite]">
+                Press Ctrl+Enter to submit
+              </div>
+            ))}
+          {submissionState === "running" && (
+            <div className="text-blue-500 font-bold mb-2 animate-[pulse_ease_1s_infinite]">Submission running...</div>
+          )}
+          {submissionState === "valid" && <div className="text-green-500 font-bold mb-2">Submission valid!</div>}
+          <pre className="whitespace-pre-wrap">{output}</pre>
+          {(submissionState === "invalid" || submissionError) && (
+            <div className="text-red-500 font-bold mt-2">
+              {submissionError ?? "Submission failed with unknown status"}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
