@@ -136,7 +136,7 @@ class SpectateStateMessage(TypedDict):
 
     type: Literal["spectate_state"]
     player: str
-    state: Literal["running", "valid", "invalid"]
+    state: Literal["running", "valid", "invalid"] | None
     error: NotRequired[str]
 
 
@@ -422,9 +422,21 @@ class PlayerManager:
             player.send(puzzle.json())
             if reset_editors:
                 player.send(player.editor_json())
+                # Notify spectating admins of the reset
+                self.notify_spectators(player.name, {
+                    "type": "edit",
+                    "code": player.code,
+                    "row": player.row,
+                    "col": player.col,
+                })
                 if existing_submission:
                     player.send({"type": "state", "state": existing_submission.status})
                     player.send({"type": "output", "content": existing_submission.output})
+                    self.notify_spectators(player.name, {"type": "state", "state": existing_submission.status})
+                    self.notify_spectators(player.name, {"type": "output", "content": existing_submission.output})
+                else:
+                    # Clear submission state for spectating admins
+                    self.notify_spectators_clear_state(player.name)
         return None
 
     async def _submit_task(self, player: Player, submission: Submission) -> None:
@@ -568,6 +580,21 @@ class PlayerManager:
             if player_name in admin.spectating:
                 try:
                     # TODO: use queue tasks like with players
+                    asyncio.create_task(admin.ws.send(data, True))
+                except Exception:
+                    pass
+
+    def notify_spectators_clear_state(self, player_name: str):
+        """Clears submission state for a player on all spectating admins."""
+        msg: SpectateStateMessage = {
+            "type": "spectate_state",
+            "player": player_name,
+            "state": None,
+        }
+        data = json.dumps(msg)
+        for admin in self.admins.values():
+            if player_name in admin.spectating:
+                try:
                     asyncio.create_task(admin.ws.send(data, True))
                 except Exception:
                     pass

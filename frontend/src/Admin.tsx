@@ -17,7 +17,7 @@ type AdminMessage =
   | { type: "puzzles"; puzzles: PuzzleInfo[]; current: string | null }
   | { type: "players"; players: string[] }
   | { type: "spectate_editor"; player: string; code: string; row: number; col: number }
-  | { type: "spectate_state"; player: string; state: "running" | "valid" | "invalid" }
+  | { type: "spectate_state"; player: string; state: "running" | "valid" | "invalid" | null }
   | { type: "spectate_output"; player: string; content: string }
   | { type: "error"; message: string };
 
@@ -95,7 +95,7 @@ export default function Admin() {
               row: prev[data.player]?.row ?? 0,
               col: prev[data.player]?.col ?? 0,
               state: data.state,
-              output: data.state === "running" ? "" : (prev[data.player]?.output ?? ""),
+              output: data.state === "running" || data.state === null ? "" : (prev[data.player]?.output ?? ""),
             },
           }));
           break;
