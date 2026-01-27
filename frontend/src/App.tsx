@@ -142,6 +142,10 @@ function App() {
     if (!allowLocalKeyboard) return;
 
     const handleKeyEvent = (evt: KeyboardEvent) => {
+      // Prevent default browser behavior for Tab key
+      if (evt.code === "Tab") {
+        evt.preventDefault();
+      }
       const action = editor.actLocal(evt);
       handleEditorAction(action, false);
     };

@@ -84,6 +84,10 @@ export class EditorState {
     return this.code[this.row];
   }
 
+  get lineBeforeCursor() {
+    return this.line.slice(0, this.realCol);
+  }
+
   set line(value: string[]) {
     this.code[this.row] = value;
   }
@@ -140,7 +144,7 @@ export class EditorState {
       // Navigation keys
       case "KEY_LEFT":
         if (this.col > 0) {
-          this.col--;
+          this.col = this.realCol - 1;
         } else if (this.row > 0) {
           this.row--;
           this.col = this.line.length;
@@ -148,7 +152,7 @@ export class EditorState {
         return "navigate";
       case "KEY_RIGHT":
         if (this.col < this.line.length) {
-          this.col++;
+          this.col = this.realCol + 1;
         } else if (this.row < this.code.length - 1) {
           this.row++;
           this.col = 0;
@@ -190,8 +194,11 @@ export class EditorState {
       // Editing keys
       case "KEY_BACKSPACE":
         if (this.realCol > 0) {
-          this.line.splice(this.realCol - 1, 1);
-          this.col--;
+          const isOnlyWhitespace = /^\s+$/.test(this.lineBeforeCursor.join(""));
+          // If only whitespace, remove a tab
+          const charsToDelete = isOnlyWhitespace ? Math.min(2, this.realCol) : 1;
+          this.line.splice(this.realCol - charsToDelete, charsToDelete);
+          this.col -= charsToDelete;
         } else if (this.row > 0) {
           const [currLine] = this.code.splice(this.row, 1);
           this.row--;
@@ -209,10 +216,33 @@ export class EditorState {
           this.line = this.line.concat(nextLine);
         }
         return "edit";
+      case "KEY_TAB": {
+        const spaces = "  ".split("");
+        this.line.splice(this.realCol, 0, ...spaces);
+        this.col = this.realCol + spaces.length;
+        return "edit";
+      }
       case "KEY_ENTER": {
-        this.code.splice(this.row + 1, 0, this.line.splice(this.realCol));
+        // Look at content before cursor to determine indentation
+        const beforeCursorString = this.lineBeforeCursor.join("");
+        let indentSize = beforeCursorString.match(/^\s*/)?.[0].length || 0;
+
+        const trimmedBefore = beforeCursorString.trim();
+        if (trimmedBefore.endsWith(":")) {
+          indentSize += 2;
+        }
+        else if (["return", "raise", "break", "continue", "pass"].some(kw => trimmedBefore.startsWith(kw))) {
+          indentSize = Math.max(0, indentSize - 2);
+        }
+
+        // Split the line at cursor and create new line
+        const newLineContent = this.line.splice(this.realCol);
         this.row++;
-        this.col = 0;
+
+        // Apply indentation to new line
+        const indent = " ".repeat(indentSize).split("");
+        this.code.splice(this.row, 0, indent.concat(newLineContent));
+        this.col = indent.length;
         return "edit";
       }
 
