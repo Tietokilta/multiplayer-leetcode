@@ -33,6 +33,8 @@ const navigationKeys = new Set([
   "KEY_PAGEDOWN",
 ]);
 
+const tabSize = 2;
+
 export type EditorAction = "edit" | "navigate" | "submit" | false;
 
 export class EditorState {
@@ -195,8 +197,8 @@ export class EditorState {
       case "KEY_BACKSPACE":
         if (this.realCol > 0) {
           const isOnlyWhitespace = /^\s+$/.test(this.lineBeforeCursor.join(""));
-          // If only whitespace, remove a tab
-          const charsToDelete = isOnlyWhitespace ? Math.min(2, this.realCol) : 1;
+          // If only whitespace, remove up to previous tab stop
+          const charsToDelete = isOnlyWhitespace ? this.realCol % tabSize || tabSize : 1;
           this.line.splice(this.realCol - charsToDelete, charsToDelete);
           this.col -= charsToDelete;
         } else if (this.row > 0) {
@@ -217,7 +219,8 @@ export class EditorState {
         }
         return "edit";
       case "KEY_TAB": {
-        const spaces = "  ".split("");
+        // Insert spaces until next tab stop
+        const spaces = " ".repeat(tabSize - (this.realCol % tabSize)).split("");
         this.line.splice(this.realCol, 0, ...spaces);
         this.col = this.realCol + spaces.length;
         return "edit";
@@ -230,8 +233,7 @@ export class EditorState {
         const trimmedBefore = beforeCursorString.trim();
         if (trimmedBefore.endsWith(":")) {
           indentSize += 2;
-        }
-        else if (["return", "raise", "break", "continue", "pass"].some(kw => trimmedBefore.startsWith(kw))) {
+        } else if (["return", "raise", "break", "continue", "pass"].some((kw) => trimmedBefore.startsWith(kw))) {
           indentSize = Math.max(0, indentSize - 2);
         }
 
