@@ -1,6 +1,7 @@
 export class TurnTracker {
   seenKeyboards: string[] = [];
   currentTurnIndex: number = 0;
+  ignoreWrongOrder: boolean = false;
 
   get currentKeyboard(): string | undefined {
     return this.seenKeyboards[this.currentTurnIndex];
@@ -29,7 +30,7 @@ export class TurnTracker {
   }
 
   isMyTurn(keyboard: string): boolean {
-    return this.seenKeyboards.length <= 1 || keyboard === this.currentKeyboard;
+    return this.ignoreWrongOrder || this.seenKeyboards.length <= 1 || keyboard === this.currentKeyboard;
   }
 
   advanceTurn() {

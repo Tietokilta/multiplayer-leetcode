@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type ConnState, stateColors, GameServerHandler } from "./connection";
+import { type ConnState, stateColors, GameServerHandler } from "../connection";
 import { useLocalStorage } from "usehooks-ts";
 
 type PuzzleInfo = { id: string; title: string };
