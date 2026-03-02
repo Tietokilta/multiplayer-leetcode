@@ -142,8 +142,11 @@ export default function Admin() {
     }
   }, [spectating, loggedIn, server]);
 
-  const changePuzzle = (puzzleId: string) => {
-    server.send({ type: "change_puzzle", puzzle: puzzleId });
+  const [nextPuzzle, setNextPuzzle] = useState<string | null>(null);
+  const changePuzzle = () => {
+    if (!nextPuzzle) return;
+    server.send({ type: "change_puzzle", puzzle: nextPuzzle });
+    setNextPuzzle(null);
   };
 
   const addPlayer = () => {
@@ -200,7 +203,7 @@ export default function Admin() {
         </div>
         <button
           type="submit"
-          className="bg-blue-500 text-white rounded p-2 w-full disabled:opacity-50"
+          className="bg-blue-500 text-white rounded p-2 w-full disabled:opacity-70"
           disabled={!serverIp || !password || connState === "connecting"}
         >
           Connect
@@ -230,15 +233,15 @@ export default function Admin() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Puzzle Control */}
         <div className="border rounded p-4">
-          <h2 className="font-bold mb-2">Puzzle Control</h2>
-          <div className="mb-2">
+          <h2 className="font-bold mb-2">Current Puzzle: {currentPuzzle ?? "None"}</h2>
+          <div className="mb-2 flex items-center gap-2">
             <select
               className="border rounded p-2 w-full"
-              value={currentPuzzle ?? ""}
-              onChange={(e) => changePuzzle(e.target.value)}
+              value={nextPuzzle ?? ""}
+              onChange={(e) => setNextPuzzle(e.target.value)}
             >
               <option value="" disabled>
-                Select puzzle
+                Select next puzzle&hellip;
               </option>
               {puzzles.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -246,6 +249,13 @@ export default function Admin() {
                 </option>
               ))}
             </select>
+            <button
+              className="text-green-500 underline p-1 rounded cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed hover:bg-green-500/25"
+              onClick={changePuzzle}
+              disabled={!nextPuzzle}
+            >
+              Change
+            </button>
           </div>
           <button
             className="text-blue-500 underline text-sm p-1 rounded cursor-pointer hover:bg-blue-500/25"
@@ -258,7 +268,7 @@ export default function Admin() {
         {/* Player Management */}
         <div className="border rounded p-4">
           <h2 className="font-bold mb-2">Players ({players.length})</h2>
-          <div className="flex gap-2 mb-2">
+          <div className="flex gap-2 items-center mb-2">
             <input
               className="border rounded p-1 flex-1"
               type="text"
@@ -268,7 +278,7 @@ export default function Admin() {
               onKeyDown={(e) => e.key === "Enter" && addPlayer()}
             />
             <button
-              className="text-green-500 underline rounded px-2 py-1 cursor-pointer hover:bg-green-500/25"
+              className="text-green-500 underline rounded p-1 cursor-pointer hover:bg-green-500/25"
               onClick={addPlayer}
             >
               Add
