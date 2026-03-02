@@ -4,9 +4,11 @@
   template: |
     # Your code here
     |
-  start_pos: [0, 0]
-  wrapper: "{}"
-  expected_output: "Hello, World!"
+  wrapper: |
+    print("Hello, World!")
+    print("=== END EXPECTED OUTPUT ===")
+
+    {}
 
 - id: sum
   title: Sum of Two Numbers
@@ -18,27 +20,18 @@
   wrapper: |
     {}
 
-    print("1 + 1 =")
-    print(sum_two_numbers(1, 1))
-    print("2 + 3 =")
-    print(sum_two_numbers(2, 3))
-    print("98234 + 12342 =")
-    print(sum_two_numbers(98234, 12342))
-    print("0 + 0 =")
-    print(sum_two_numbers(0, 0))
-    print("-5 + 12 =")
-    print(sum_two_numbers(-5, 12))
-  expected_output: |
-    1 + 1 =
-    2
-    2 + 3 =
-    5
-    98234 + 12342 =
-    110576
-    0 + 0 =
-    0
-    -5 + 12 =
-    7
+    def _test():
+      import random as _random
+      _test_pairs = [(1, 1), (2, 3), (98234, 12342), (0, 0), (-5, 12)] + [
+        (_random.randint(-100, 100), _random.randint(-100, 100)) for _ in range(3)
+      ]
+
+      for _a, _b in _test_pairs:
+        print("sum_two_numbers(" + str(_a) + ", " + str(_b) + ") =", _a + _b)
+      print("=== END EXPECTED OUTPUT ===")
+
+      for _a, _b in _test_pairs:
+        print("sum_two_numbers(" + str(_a) + ", " + str(_b) + ") =", sum_two_numbers(_a, _b))
 
 - id: fibonacci
   title: Fibonacci Sequence
@@ -61,51 +54,28 @@
   wrapper: |
     {}
 
-    fibonacci(5)
-    print()
-    fibonacci(10)
-    print()
-    fibonacci(1)
-    print()
-    fibonacci(0)
-    print()
-    fibonacci(15)
-  expected_output: |
-    1
-    1
-    2
-    3
-    5
+    def _test():
+      import random as _random
+      _test_ns = [5, 10, 1, 0, 15] + [_random.randint(7, 15) for _ in range(3)]
 
-    1
-    1
-    2
-    3
-    5
-    8
-    13
-    21
-    34
-    55
+      def _fib(n):
+        a, b = 1, 1
+        for _ in range(n):
+          print(a)
+          a, b = b, a + b
 
-    1
+      for _n in _test_ns:
+        print("fibonacci(" + str(_n) + "):")
+        _fib(_n)
+        print()
+      print("=== END EXPECTED OUTPUT ===")
 
+      for _n in _test_ns:
+        print("fibonacci(" + str(_n) + "):")
+        fibonacci(_n)
+        print()
 
-    1
-    1
-    2
-    3
-    5
-    8
-    13
-    21
-    34
-    55
-    89
-    144
-    233
-    377
-    610
+    _test()
 
 - id: factorial
   title: Factorial
@@ -120,23 +90,17 @@
   wrapper: |
     {}
 
-    print("5! =")
-    print(factorial(5))
-    print("10! =")
-    print(factorial(10))
-    print("1! =")
-    print(factorial(1))
-    print("7! =")
-    print(factorial(7))
-  expected_output: |
-    5! =
-    120
-    10! =
-    3628800
-    1! =
-    1
-    7! =
-    5040
+    def _test():
+      import random as _random
+      from math import factorial as _factorial
+      _test_ns = [5, 10, 1, 7] + [_random.randint(8, 20) for _ in range(3)]
+
+      for _n in _test_ns:
+        print("factorial(" + str(_n) + ") =", _factorial(_n))
+      print("=== END EXPECTED OUTPUT ===")
+
+      for _n in _test_ns:
+        print("factorial(" + str(_n) + ") =", factorial(_n))
 
 - id: bogosort
   title: Bogosort
@@ -174,39 +138,21 @@
       sort = make_wrapper(list.sort)
       reverse = make_wrapper(list.reverse)
 
-    lst1 = ListWrapper([])
-    print(f"Sorting: {{lst1}}")
-    bogosort(lst1)
-    print(lst1)
+    def _test():
+      import random as _random
+      _lsts = [
+        [],
+        [1],
+        [3, 2, 5, 1, 4],
+        [10, -1, 2, 0, 5],
+        [_random.randint(-10, 10) for _ in range(_random.randint(5, 7))]
+      ]
 
-    lst2 = ListWrapper([1])
-    print(f"Sorting: {{lst2}}")
-    bogosort(lst2)
-    print(lst2)
+      for _lst in _lsts:
+        print("bogosort(" + str(_lst) + ") =", sorted(_lst))
+      print("=== END EXPECTED OUTPUT ===")
 
-    lst3 = ListWrapper([3, 2, 5, 1, 4])
-    print(f"Sorting: {{lst3}}")
-    bogosort(lst3)
-    print(lst3)
-
-    lst4 = ListWrapper([10, -1, 2, 0, 5])
-    print(f"Sorting: {{lst4}}")
-    bogosort(lst4)
-    print(lst4)
-
-    import random
-    lst5 = ListWrapper([random.randint(-10, 10) for _ in range(random.randint(5, 7))])
-    print(f"Sorting a random list")
-    bogosort(lst5)
-    print("It's sorted!" if lst5 == sorted(lst5) else lst5)
-  expected_output: |
-    Sorting: []
-    []
-    Sorting: [1]
-    [1]
-    Sorting: [3, 2, 5, 1, 4]
-    [1, 2, 3, 4, 5]
-    Sorting: [10, -1, 2, 0, 5]
-    [-1, 0, 2, 5, 10]
-    Sorting a random list
-    It's sorted!
+      for _lst in _lsts:
+        _wrapped = ListWrapper(_lst)
+        bogosort(_wrapped)
+        print("bogosort(" + str(_lst) + ") =", _wrapped)

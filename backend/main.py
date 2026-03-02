@@ -17,6 +17,7 @@ from yaml import safe_load
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
 
 
 class LoginCmd(TypedDict):
@@ -210,23 +211,33 @@ async def run_code(
         stdin.write(input.encode("utf-8"))
         await stdin.drain()
 
+    # Buffer pre-separator output; only stream actual output (post-separator) to player
+    expected_output = ""
+    sep_found = False
+
     try:
         # Read incremental output and yield it
         async with asyncio.timeout(3):  # Slightly longer than process timeout to get final output
             while True:
-                line = await stdout.read(1024)
-                if not line:
+                chunk = await stdout.read(1024)
+                if not chunk:
                     # EOF, done
                     await process.wait()
                     break
-                decoded = line.decode("iso-8859-1")  # Decode as latin-1 to avoid errors
-                yield {
-                    "type": "output",
-                    "content": decoded,
-                }
+                decoded = chunk.decode("iso-8859-1")  # Decode as latin-1 to avoid errors
                 log.debug(f"Process output: {decoded!r}")
-                submission.output += decoded
-                if len(submission.output) >= 100 * 1024:  # 100 KB limit
+                if not sep_found:
+                    expected_output += decoded
+                    expected_output, sep, remainder = expected_output.partition(SEPARATOR)
+                    if sep:
+                        sep_found = True
+                        if remainder:
+                            yield {"type": "output", "content": remainder}
+                            submission.output += remainder
+                else:
+                    yield {"type": "output", "content": decoded}
+                    submission.output += decoded
+                if len(expected_output) + len(submission.output) >= 100 * 1024:  # 100 KB limit
                     process.kill()
                     await process.wait()
                     submission.status = "invalid"
@@ -246,8 +257,11 @@ async def run_code(
             submission.status = "invalid"
             submission.error = f"Process exited with code {returncode}"
         else:
+            if not sep_found:
+                submission.status = "invalid"
+                submission.error = "Missing expected output separator"
             # TODO: fuzzier matching?
-            if submission.puzzle.expected_output.strip() == submission.output.strip():
+            elif expected_output.strip() == submission.output.strip():
                 submission.status = "valid"
             else:
                 submission.status = "invalid"
@@ -314,8 +328,7 @@ class Puzzle:
     description: str
     template: str  # code template to start with
     start_pos: tuple[int, int]  # (col, row)
-    wrapper: str  # wrapper to insert user code in with format()
-    expected_output: str
+    wrapper: str  # wrapper to insert user code in with format(); must print expected output then SEPARATOR before running user code
 
     def json(self) -> PuzzleJson:
         """Returns the puzzle data as JSON."""
@@ -423,12 +436,15 @@ class PlayerManager:
             if reset_editors:
                 player.send(player.editor_json())
                 # Notify spectating admins of the reset
-                self.notify_spectators(player.name, {
-                    "type": "edit",
-                    "code": player.code,
-                    "row": player.row,
-                    "col": player.col,
-                })
+                self.notify_spectators(
+                    player.name,
+                    {
+                        "type": "edit",
+                        "code": player.code,
+                        "row": player.row,
+                        "col": player.col,
+                    },
+                )
                 if existing_submission:
                     player.send({"type": "state", "state": existing_submission.status})
                     player.send({"type": "output", "content": existing_submission.output})
