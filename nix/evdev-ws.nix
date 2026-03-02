@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, makeWrapper, python3Packages }:
+{ lib, stdenvNoCC, makeWrapper, python3Packages, src }:
 
 let
   python = python3Packages.python.withPackages (ps: [
@@ -11,7 +11,7 @@ stdenvNoCC.mkDerivation {
   pname = "evdev-ws";
   version = "0.1.0";
 
-  src = ../evdev-ws;
+  inherit src;
 
   nativeBuildInputs = [ makeWrapper ];
 

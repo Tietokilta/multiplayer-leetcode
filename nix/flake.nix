@@ -3,16 +3,27 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    frontendSrc = {
+      url = "path:../frontend";
+      flake = false;
+    };
+    evdevWsSrc = {
+      url = "path:../evdev-ws";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, frontendSrc, evdevWsSrc }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      specialArgs = {
+        inherit frontendSrc evdevWsSrc;
+      };
     in
     {
       nixosConfigurations.kiosk = nixpkgs.lib.nixosSystem {
-        inherit system;
+        inherit system specialArgs;
         modules = [
           ({ modulesPath, ... }: {
             imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix") ];
@@ -22,7 +33,7 @@
       };
 
       nixosConfigurations.kiosk-vm = nixpkgs.lib.nixosSystem {
-        inherit system;
+        inherit system specialArgs;
         modules = [
           ./configuration.nix
           ({ modulesPath, lib, ... }: {

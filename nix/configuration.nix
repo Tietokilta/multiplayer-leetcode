@@ -1,8 +1,8 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, evdevWsSrc, frontendSrc, ... }:
 
 let
-  evdev-ws = pkgs.callPackage ./evdev-ws.nix {};
-  frontend = pkgs.callPackage ./frontend.nix {};
+  evdev-ws = pkgs.callPackage ./evdev-ws.nix { src = evdevWsSrc; };
+  frontend = pkgs.callPackage ./frontend.nix { src = frontendSrc; };
 in
 {
   system.stateVersion = "25.11";
