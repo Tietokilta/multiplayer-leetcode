@@ -2,6 +2,8 @@
 
 This repository contains a Nix flake in `nix/` that builds a NixOS kiosk ISO.
 
+Pixiecore netboot setup and quick testing docs: `nix/PIXIECORE.md`.
+
 ## Build with Nix
 
 ### Prerequisites

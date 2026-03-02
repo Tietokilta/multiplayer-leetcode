@@ -12,18 +12,6 @@
       },
       "parent": []
     },
-    "frontendSrc": {
-      "flake": false,
-      "locked": {
-        "path": "../frontend",
-        "type": "path"
-      },
-      "original": {
-        "path": "../frontend",
-        "type": "path"
-      },
-      "parent": []
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1771043024,
@@ -43,7 +31,6 @@
     "root": {
       "inputs": {
         "evdevWsSrc": "evdevWsSrc",
-        "frontendSrc": "frontendSrc",
         "nixpkgs": "nixpkgs"
       }
     }

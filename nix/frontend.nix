@@ -1,4 +1,8 @@
-{ lib, buildNpmPackage, src }:
+{
+  lib,
+  buildNpmPackage,
+  src,
+}:
 
 buildNpmPackage {
   pname = "multiplayer-leetcode-frontend";
@@ -6,7 +10,7 @@ buildNpmPackage {
 
   inherit src;
 
-  npmDepsHash = "sha256-//Ods+gN8JLmlg7YR9c+mc3oAIhqje3zXrvd8jZH3Vk=";
+  npmDepsHash = "sha256-HylViUWrGi8gDawLSnQ9sdDOFwq1UThSlWZ60nyySFU=";
 
   installPhase = ''
     runHook preInstall

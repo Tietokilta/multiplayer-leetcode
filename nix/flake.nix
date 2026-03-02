@@ -1,24 +1,20 @@
 {
-  description = "NixOS kiosk ISO for Multiplayer LeetCode";
+  description = "NixOS kiosk netboot for Multiplayer LeetCode";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    frontendSrc = {
-      url = "path:../frontend";
-      flake = false;
-    };
     evdevWsSrc = {
       url = "path:../evdev-ws";
       flake = false;
     };
   };
 
-  outputs = { self, nixpkgs, frontendSrc, evdevWsSrc }:
+  outputs = { self, nixpkgs, evdevWsSrc }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
       specialArgs = {
-        inherit frontendSrc evdevWsSrc;
+        inherit evdevWsSrc;
       };
     in
     {
@@ -26,7 +22,7 @@
         inherit system specialArgs;
         modules = [
           ({ modulesPath, ... }: {
-            imports = [ (modulesPath + "/installer/cd-dvd/installation-cd-minimal.nix") ];
+            imports = [ (modulesPath + "/installer/netboot/netboot.nix") ];
           })
           ./configuration.nix
         ];
@@ -53,9 +49,38 @@
         ];
       };
 
+      nixosConfigurations.netboot-host = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          kioskSystem = self.nixosConfigurations.kiosk;
+        };
+        modules = [ ./netboot-host.nix ];
+      };
+
+      nixosConfigurations.netboot-host-vm = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          kioskSystem = self.nixosConfigurations.kiosk;
+        };
+        modules = [
+          ./netboot-host.nix
+          ({ modulesPath, ... }: {
+            imports = [ (modulesPath + "/virtualisation/qemu-vm.nix") ];
+            virtualisation = {
+              memorySize = 2048;
+              cores = 2;
+              graphics = false;
+            };
+          })
+        ];
+      };
+
       packages.${system} = {
-        iso = self.nixosConfigurations.kiosk.config.system.build.isoImage;
+        netboot-kernel = self.nixosConfigurations.kiosk.config.system.build.kernel;
+        netboot-initrd = self.nixosConfigurations.kiosk.config.system.build.netbootRamdisk;
+        netboot-ipxe-script = self.nixosConfigurations.kiosk.config.system.build.netbootIpxeScript;
         vm = self.nixosConfigurations.kiosk-vm.config.system.build.vm;
+        netboot-host-vm = self.nixosConfigurations.netboot-host-vm.config.system.build.vm;
       };
 
       checks.${system}.kiosk-smoke = import ./tests.nix { inherit pkgs; };
