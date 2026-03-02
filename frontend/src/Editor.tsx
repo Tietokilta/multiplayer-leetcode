@@ -35,7 +35,7 @@ const navigationKeys = new Set([
 
 const tabSize = 2;
 
-export type EditorAction = "edit" | "navigate" | "submit" | false;
+export type EditorAction = "edit" | "navigate" | "submit" | "ctrl_up" | "ctrl_down" | false;
 
 export class EditorState {
   layouts: Map<string, KeyboardLayout> = new Map();
@@ -128,6 +128,8 @@ export class EditorState {
 
     // Special actions
     if (this.ctrl && key === "KEY_ENTER") return "submit";
+    if (this.ctrl && key === "KEY_UP") return "ctrl_up";
+    if (this.ctrl && key === "KEY_DOWN") return "ctrl_down";
 
     // If messing up and not a navigation key, press something random
     if (messUp && !navigationKeys.has(key)) {

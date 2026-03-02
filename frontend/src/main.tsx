@@ -6,8 +6,4 @@ import Admin from "./Admin.tsx";
 
 const isAdmin = window.location.pathname === "/admin";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    {isAdmin ? <Admin /> : <App />}
-  </StrictMode>,
-);
+createRoot(document.getElementById("root")!).render(<StrictMode>{isAdmin ? <Admin /> : <App />}</StrictMode>);

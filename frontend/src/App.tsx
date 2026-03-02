@@ -1,8 +1,9 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import { useLocalStorage } from "usehooks-ts";
-import { type ConnState, stateColors, GameServerHandler } from "./connection";
-import { EditorState, type EditorAction } from "./Editor";
-import { TurnTracker } from "./TurnTracker";
+import { create } from "zustand";
+import { type ConnState, GameServerHandler, stateColors } from "./connection";
+import { type EditorAction, EditorState } from "./Editor";
 import type {
   KeyboardServerCmd,
   KeyboardServerMessage,
@@ -11,6 +12,7 @@ import type {
   PuzzleMessage,
   StateMessage,
 } from "./messages";
+import { TurnTracker } from "./TurnTracker";
 
 class KeyboardServerHandler {
   active: boolean = false;
@@ -87,6 +89,56 @@ function KeyboardList({ current, keyboards }: { current: string | undefined; key
   );
 }
 
+type State = {
+  rendered?: ReactNode;
+  puzzle: PuzzleMessage | null;
+  output: string;
+  submissionState: StateMessage["state"] | null;
+  submissionError: string | null;
+  edit: (rendered: ReactNode) => void;
+  handleMessage: (editor: EditorState, data: PlayerMessage) => void;
+};
+
+const useStore = create<State>()((set) => ({
+  puzzle: null,
+  output: "",
+  submissionState: null,
+  submissionError: null,
+  edit: (rendered: ReactNode) => set({ rendered }),
+  handleMessage: (editor: EditorState, data: PlayerMessage) => {
+    switch (data.type) {
+      case "editor":
+        editor.load(data);
+        set({ rendered: editor.render() });
+        break;
+      case "puzzle":
+        set((prev) =>
+          prev.puzzle?.title === data.title
+            ? { puzzle: data }
+            : { puzzle: data, output: "", submissionState: null, submissionError: null },
+        );
+        break;
+      case "output":
+        set((prev) => ({ output: data.first ? data.content : prev.output + data.content }));
+        break;
+      case "state":
+        if (data.state === "running") set({ output: "" });
+        set({
+          submissionState: data.state,
+          submissionError: data.error ?? null,
+        });
+        break;
+      case "error":
+        console.error("Game server error:", data.message);
+        set({ submissionError: data.message });
+        break;
+      default:
+        console.warn("Unhandled message from game server:", data);
+        break;
+    }
+  },
+}));
+
 /* eslint-disable react-hooks/immutability -- I'm lazy af */
 
 function App() {
@@ -101,14 +153,10 @@ function App() {
   const [showKeyboards, setShowKeyboards] = useLocalStorage("multiplayer-leetcode-show-keyboards", false);
   const [ignoreWrongOrder, setIgnoreWrongOrder] = useLocalStorage("multiplayer-leetcode-ignore-wrong-order", false);
 
-  const [editor] = useState(() => new EditorState(example));
   const [turnTracker] = useState(() => new TurnTracker());
-  const [rendered, setRendered] = useState<ReactNode>(editor.render());
 
-  const [puzzle, setPuzzle] = useState<PuzzleMessage | null>(null);
-  const [output, setOutput] = useState<string>("");
-  const [submissionState, setSubmissionState] = useState<StateMessage["state"] | null>(null);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [editor] = useState(() => new EditorState(example));
+  const { rendered, puzzle, output, submissionState, submissionError, edit, handleMessage } = useStore();
 
   const [currentKeyboard, setCurrentKeyboard] = useState<string | undefined>(undefined);
   const [keyboardList, setKeyboardList] = useState<string[]>([]);
@@ -118,24 +166,48 @@ function App() {
 
   const [keyboardConnected, setKeyboardConnected] = useState<ConnState>("not");
   const [gameConnected, setGameConnected] = useState<ConnState>("not");
+  const [hasGameOpened, setHasGameOpened] = useState(false);
+
+  const outputRef = useRef<HTMLPreElement>(null);
+  const [isOutputScrolling, setIsOutputScrolling] = useState(false);
+
+  useEffect(() => {
+    const el = outputRef.current;
+    if (!el) return;
+    setIsOutputScrolling(el.scrollHeight > el.clientHeight);
+  }, [output]);
 
   const handleEditorAction = useCallback(
     (action: EditorAction, advanceTurn: boolean) => {
-      if (action === "edit" || action === "navigate") {
-        setRendered(editor.render());
-        if (action === "edit") {
-          if (advanceTurn) {
-            turnTracker.advanceTurn();
-            setKeyboardList(turnTracker.seenKeyboards.slice());
-            setCurrentKeyboard(turnTracker.currentKeyboard);
+      switch (action) {
+        case "edit":
+        case "navigate":
+          edit(editor.render());
+          if (action === "edit") {
+            if (advanceTurn) {
+              turnTracker.advanceTurn();
+              setKeyboardList(turnTracker.seenKeyboards.slice());
+              setCurrentKeyboard(turnTracker.currentKeyboard);
+            }
+            gameServer.send({ type: "edit", code: editor.getCode(), row: editor.row, col: editor.col });
           }
-          gameServer.send({ type: "edit", code: editor.getCode(), row: editor.row, col: editor.col });
-        }
-      } else if (action === "submit") {
-        gameServer.send({ type: "submit" });
+          break;
+        case "submit":
+          gameServer.send({ type: "submit" });
+          break;
+        case "ctrl_up":
+        case "ctrl_down":
+          if (outputRef.current) {
+            const scrollAmount = outputRef.current.clientHeight / 3;
+            outputRef.current.scrollBy({
+              top: action === "ctrl_up" ? -scrollAmount : scrollAmount,
+              behavior: "smooth",
+            });
+          }
+          break;
       }
     },
-    [editor, gameServer, turnTracker],
+    [edit, editor, gameServer, turnTracker],
   );
 
   useEffect(() => {
@@ -203,37 +275,12 @@ function App() {
 
   useEffect(() => {
     gameServer.handleState = setGameConnected;
-    gameServer.handleLoginError = setServerIpError;
-    gameServer.handleMessage = (data) => {
-      switch (data.type) {
-        case "editor":
-          editor.load(data);
-          setRendered(editor.render());
-          break;
-        case "puzzle":
-          setPuzzle(data);
-          setOutput("");
-          setSubmissionState(null);
-          setSubmissionError(null);
-          break;
-        case "output":
-          setOutput((prev) => (data.first ? data.content : prev + data.content));
-          break;
-        case "state":
-          if (data.state === "running") setOutput("");
-          setSubmissionState(data.state);
-          setSubmissionError(data.error ?? null);
-          break;
-        case "error":
-          console.error("Game server error:", data.message);
-          setSubmissionError(data.message);
-          break;
-        default:
-          console.warn("Unhandled message from game server:", data);
-          break;
-      }
+    gameServer.handleLogin = (success: boolean) => {
+      if (success) setHasGameOpened(true);
     };
-  }, [gameServer, editor, setServerIpError]);
+    gameServer.handleLoginError = setServerIpError;
+    gameServer.handleMessage = (data: PlayerMessage) => handleMessage(editor, data);
+  }, [gameServer, editor, handleMessage, setServerIpError]);
 
   useEffect(() => {
     if (!myId || !serverIp || serverIpError) return;
@@ -347,6 +394,15 @@ function App() {
     );
   }
 
+  if (!hasGameOpened) {
+    return (
+      <>
+        {connState}
+        <div className="m-4 border rounded p-4">Connecting to game server&hellip;</div>
+      </>
+    );
+  }
+
   return (
     <div className="flex flex-col p-4 gap-4 h-screen">
       {connState}
@@ -354,34 +410,31 @@ function App() {
       {puzzle ? (
         <div className="border rounded p-4 flex flex-col gap-2">
           <h2 className="font-bold text-xl">{puzzle.title}</h2>
-          {puzzle.description.split("\n\n").map((para, i) => (
-            <p key={i}>{para}</p>
-          ))}
+          <Markdown>{puzzle.description}</Markdown>
         </div>
       ) : (
         <div className="border rounded p-4 text-red-500">The server currently has no puzzle loaded.</div>
       )}
-      <div className="grid grid-cols-2 gap-4 flex-grow">
+      <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
         <div className="border rounded p-4">
           <h2 className="font-bold text-lg mb-2">Code</h2>
           {rendered}
         </div>
-        <div className="border rounded p-4">
-          {submissionState === null ||
-            (submissionState === "invalid" && (
-              <div className="text-blue-500 font-bold mb-2 animate-[pulse_ease_2s_infinite]">
-                Press Ctrl+Enter to submit
-              </div>
-            ))}
-          {submissionState === "running" && (
-            <div className="text-blue-500 font-bold mb-2 animate-[pulse_ease_1s_infinite]">Submission running...</div>
-          )}
-          {submissionState === "valid" && <div className="text-green-500 font-bold mb-2">Submission valid!</div>}
-          <pre className="whitespace-pre-wrap">{output}</pre>
-          {(submissionState === "invalid" || submissionError) && (
-            <div className="text-red-500 font-bold mt-2">
-              {submissionError ?? "Submission failed with unknown status"}
+        <div className="border rounded p-4 flex flex-col gap-2 min-h-0">
+          {(submissionState === null || submissionState === "invalid") && (
+            <div className="text-blue-500 font-bold animate-[pulse_ease_2s_infinite]">
+              Press Ctrl+Enter to submit{isOutputScrolling && ", Ctrl+Up/Down to scroll output"}
             </div>
+          )}
+          {submissionState === "running" && (
+            <div className="text-blue-500 font-bold animate-[pulse_ease_1s_infinite]">Submission running...</div>
+          )}
+          {submissionState === "valid" && <div className="text-green-500 font-bold">Submission valid!</div>}
+          <pre ref={outputRef} className="whitespace-pre-wrap flex-shrink overflow-y-auto scroll-smooth">
+            {output}
+          </pre>
+          {(submissionState === "invalid" || submissionError) && (
+            <div className="text-red-500 font-bold">{submissionError ?? "Submission failed with unknown status"}</div>
           )}
         </div>
       </div>
