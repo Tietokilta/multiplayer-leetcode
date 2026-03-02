@@ -145,7 +145,7 @@ export class EditorState {
     switch (key) {
       // Navigation keys
       case "KEY_LEFT":
-        if (this.col > 0) {
+        if (this.realCol > 0) {
           this.col = this.realCol - 1;
         } else if (this.row > 0) {
           this.row--;
@@ -200,7 +200,7 @@ export class EditorState {
           // If only whitespace, remove up to previous tab stop
           const charsToDelete = isOnlyWhitespace ? this.realCol % tabSize || tabSize : 1;
           this.line.splice(this.realCol - charsToDelete, charsToDelete);
-          this.col -= charsToDelete;
+          this.col = Math.min(this.col - charsToDelete, this.line.length);
         } else if (this.row > 0) {
           const [currLine] = this.code.splice(this.row, 1);
           this.row--;
