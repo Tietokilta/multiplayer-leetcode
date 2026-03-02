@@ -33,23 +33,27 @@
       for _a, _b in _test_pairs:
         print("sum_two_numbers(" + str(_a) + ", " + str(_b) + ") =", sum_two_numbers(_a, _b))
 
+    _test()
+
 - id: fibonacci
   title: Fibonacci Sequence
   description: |
-    Write a function that *prints* the first N numbers in the Fibonacci sequence.
+    Write a function that **prints** the first N numbers in the Fibonacci sequence.
 
     The Fibonacci sequence starts with 1 and 1, and each subsequent number is the sum of the two preceding ones.
 
-    For example, the first 6 numbers in the Fibonacci sequence are:
-    1
-    1
-    1 + 1 = 2
-    1 + 2 = 3
-    2 + 3 = 5
+    For example, the first 6 numbers in the Fibonacci sequence are:\
+    1\
+    1\
+    1 + 1 = 2\
+    1 + 2 = 3\
+    2 + 3 = 5\
     3 + 5 = 8
   template: |
     def fibonacci(n):
       # Your code here
+      a = 1
+      b = 1
       |
   wrapper: |
     {}
@@ -101,6 +105,8 @@
 
       for _n in _test_ns:
         print("factorial(" + str(_n) + ") =", factorial(_n))
+
+    _test()
 
 - id: bogosort
   title: Bogosort
@@ -156,3 +162,5 @@
         _wrapped = ListWrapper(_lst)
         bogosort(_wrapped)
         print("bogosort(" + str(_lst) + ") =", _wrapped)
+
+    _test()
