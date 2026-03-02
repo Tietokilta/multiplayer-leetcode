@@ -74,7 +74,7 @@ class CodeRunOutput(TypedDict):
 
 class CodeRunState(TypedDict):
     type: Literal["state"]
-    state: Literal["running", "valid", "invalid"]
+    state: Literal["running", "valid", "invalid", "expired"]
     error: NotRequired[str]
 
 
@@ -137,7 +137,7 @@ class SpectateStateMessage(TypedDict):
 
     type: Literal["spectate_state"]
     player: str
-    state: Literal["running", "valid", "invalid"] | None
+    state: Literal["running", "valid", "invalid", "expired"] | None
     error: NotRequired[str]
 
 
@@ -346,7 +346,7 @@ class Submission:
     puzzle: Puzzle
     code: str
     output: str = ""
-    status: Literal["running", "valid", "invalid"] = "running"
+    status: Literal["running", "valid", "invalid", "expired"] = "running"
     error: str = ""
     task: asyncio.Task[None] | None = None
 
@@ -384,7 +384,9 @@ class PlayerManager:
         await player.connected(ws)
         return player
 
-    async def switch_puzzle(self, id: str, reset_editors: bool = True) -> ActionError | None:
+    async def switch_puzzle(
+        self, id: str, reset_editors: bool = True, expire_submissions: bool = False
+    ) -> ActionError | None:
         """Changes the current puzzle to the given one.
 
         Args:
@@ -395,6 +397,17 @@ class PlayerManager:
         if id not in self.puzzles:
             return {"type": "error", "message": "No such puzzle"}
         puzzle = self.puzzles[id]
+        # Expire any existing valid submissions if requested, to allow resubmission on the new puzzle
+        if expire_submissions:
+            await self.db.execute(
+                """
+                UPDATE submissions
+                SET status = 'expired'
+                WHERE puzzle_id = ? AND status = 'valid'
+                """,
+                (puzzle.id,),
+            )
+            await self.db.commit()
         # Load existing valid submissions for this puzzle
         # Using valid submissions only avoids the need to sort which is annoying in SQLite
         cursor = await self.db.execute(
@@ -708,7 +721,7 @@ async def ws_handler(
                                 )
                     elif msg["type"] == "change_puzzle":
                         log.info(f"Admin changing puzzle to {msg['puzzle']}")
-                        if error := await manager.switch_puzzle(msg["puzzle"]):
+                        if error := await manager.switch_puzzle(msg["puzzle"], expire_submissions=True):
                             await send(ws, error)
                         else:
                             # Send updated puzzle list with new current
@@ -779,7 +792,7 @@ async def ws_handler(
                     await send(ws, player.editor_json())
                     # Send latest submission state, if any
                     if submission := manager.submissions.get(name):
-                        await send(ws, {"type": "state", "state": submission.status})
+                        await send(ws, {"type": "state", "state": submission.status, "error": submission.error})
                         await send(ws, {"type": "output", "content": submission.output})
 
                 # Unknown action, not logged in
@@ -907,7 +920,7 @@ if __name__ == "__main__":
     if not ADMIN_PASSWORD:
         raise RuntimeError("ADMIN_PASSWORD environment variable not set")
 
-    basicConfig(level=INFO)
+    basicConfig(level=INFO, format="%(asctime)s %(levelname)s %(message)s")
     if environ.get("DEBUG"):
         log.setLevel(DEBUG)
 
