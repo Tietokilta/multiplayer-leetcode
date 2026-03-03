@@ -46,6 +46,7 @@ export class EditorState {
   ctrl: boolean = false;
   shift: boolean = false;
   altGr: boolean = false;
+  meta: boolean = false;
 
   constructor(code: string = "") {
     this.code = code.split("\n").map((line) => line.split(""));
@@ -123,9 +124,16 @@ export class EditorState {
       this.altGr = state !== "up";
       return false;
     }
+    if (key === "KEY_LEFTMETA" || key === "KEY_RIGHTMETA") {
+      this.meta = state !== "up";
+      return false;
+    }
 
     // Ignore other key releases
     if (state === "up") return false;
+
+    // Ignore everything if Meta is held, usually means user is using OS-level shortcuts
+    if (this.meta) return false;
 
     // Special actions
     if (this.ctrl && key === "KEY_ENTER") return "submit";
