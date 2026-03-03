@@ -78,7 +78,13 @@ export class EditorState {
     return Math.min(this.col, this.line.length);
   }
 
-  act(keyboard: string, key: string, state: KeyState, messUp: boolean = false): EditorAction {
+  act(
+    keyboard: string,
+    key: string,
+    state: KeyState,
+    messUp: boolean = false,
+    swapCase: boolean = false,
+  ): EditorAction {
     const layout = this.layouts.get(keyboard) || finnishLayout;
 
     // Track modifier keys
@@ -248,6 +254,11 @@ export class EditorState {
         }
 
         if (char) {
+          if (swapCase) {
+            const upper = char.toUpperCase();
+            const lower = char.toLowerCase();
+            if (upper !== lower) char = char === upper ? lower : upper;
+          }
           this.line.splice(this.realCol, 0, char);
           this.col++;
           this.col = this.realCol;

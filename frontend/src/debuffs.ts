@@ -38,6 +38,7 @@ export type DebuffInfo = {
   title: string;
   description: string;
   maxStrength?: number;
+  defaultStrength?: number;
 };
 
 export const debuffInfo: Record<Debuff, DebuffInfo> = {
@@ -54,6 +55,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "NASCAR Programming",
     description: "Keyboard order cycles based on time, instead of changing per keystroke.",
     maxStrength: 50, // cycles per 10s
+    defaultStrength: 20,
   },
   [Debuff.row_by_row]: {
     // TODO test
@@ -73,6 +75,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "KUKA SIIN NETIS ON",
     description: "Causes random input lag.",
     maxStrength: 2000, // ms of lag
+    defaultStrength: 1000,
   },
   [Debuff.key_shift]: {
     type: "input3",
@@ -89,9 +92,9 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Sticky Keys",
     description: "Randomly duplicates typed characters.",
     maxStrength: 50, // % chance
+    defaultStrength: 15,
   },
   [Debuff.caps_lock]: {
-    // TODO
     type: "input6",
     title: "CRUISE CONTROL FOR COOL",
     description: "Pretends Caps Lock is on.",
@@ -106,6 +109,8 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     type: "input8",
     title: "Are You Still There?",
     description: "After brief inactivity, a DVD screensaver covers the editor.",
+    maxStrength: 10000, // 10000 - ms of inactivity before screensaver
+    defaultStrength: 8000,
   },
 
   // Stackable visual debuffs:
@@ -151,6 +156,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Drowning in Code",
     description: "Makes the characters wave around.",
     maxStrength: 20, // px of wave amplitude
+    defaultStrength: 10,
   },
   [Debuff.cursor_blink]: {
     type: "visual9",
@@ -165,6 +171,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Earthquake Protocol",
     description: "Makes the editor shake randomly.",
     maxStrength: 50, // px
+    defaultStrength: 20,
   },
   [Debuff.lights_out]: {
     // TODO
@@ -172,6 +179,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Fear of the Dark",
     description: 'Makes the editor dark with a moving "window".',
     maxStrength: 10, // 1 / size of window relative to editor
+    defaultStrength: 3,
   },
   [Debuff.fog_of_war]: {
     type: "visual",
@@ -207,6 +215,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Keyboard Cat",
     description: "Inserts random characters when received.",
     maxStrength: 100, // chars
+    defaultStrength: 20,
   },
   [Debuff.clippy_attack]: {
     // TODO
@@ -225,7 +234,8 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     type: "one_off",
     title: "Angry Bird",
     description: "Launches an angry bird across the screen, breaking characters as it goes.",
-    maxStrength: 20, // chars deleted
+    maxStrength: 30, // chars deleted
+    defaultStrength: 10,
   },
   [Debuff.add_braces]: {
     // TODO

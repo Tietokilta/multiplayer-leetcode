@@ -5,6 +5,8 @@ import { PlayerController } from "./PlayerController";
 const debuffNames = Object.keys(debuffInfo) as Debuff[];
 
 function initialStrength(name: Debuff): number {
+  const def = debuffInfo[name].defaultStrength;
+  if (def) return def;
   const max = debuffInfo[name].maxStrength;
   return max ? Math.ceil(max / 2) : 1;
 }

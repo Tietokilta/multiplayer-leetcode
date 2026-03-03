@@ -78,7 +78,7 @@ export class PlayerController {
     connected: "not",
     hasBeenConnected: false,
 
-    rendered: undefined,
+    rendered: this.editor.render(new Set()), // Initial render without debuffs
     puzzle: null,
     output: "",
     submissionState: null,
@@ -225,7 +225,7 @@ export class PlayerController {
       key = reverseNavigationKeys[key] ?? key;
     }
 
-    const action = this.editor.act(port, key, state, !isMyTurn);
+    const action = this.editor.act(port, key, state, !isMyTurn, this.hasDebuff(Debuff.caps_lock));
 
     switch (action) {
       case "edit":
@@ -274,7 +274,7 @@ export class PlayerController {
 
   handleKeyboardEvent(evt: KeyboardEvent): void {
     const [key, state] = mapKeyboardEvent(evt);
-    this.handleKey(false, "local", key, state);
+    this.handleKey(true, "local", key, state);
   }
 
   handleKeyboardMessage(msg: KeyboardServerMessage): void {
