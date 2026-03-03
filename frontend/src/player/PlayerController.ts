@@ -115,6 +115,12 @@ export class PlayerController {
     return name.some((n) => activeDebuffNames.has(n));
   }
 
+  findDebuff(name: Debuff): ActiveDebuff | undefined {
+    const { activeDebuffNames, debuffs } = this.usePlayerStore.getState();
+    if (!activeDebuffNames.has(name)) return undefined;
+    return debuffs.find((d) => d.name === name);
+  }
+
   tick() {
     const now = Date.now();
     const { debuffs } = this.usePlayerStore.getState();
@@ -124,8 +130,8 @@ export class PlayerController {
       setTimeout(() => this.tick(), remaining[0].endTime - now);
     }
 
-    if (this.hasDebuff(Debuff.auto_cycle)) {
-      const debuff = remaining.find((d) => d.name === Debuff.auto_cycle)!;
+    let debuff;
+    if ((debuff = this.findDebuff(Debuff.auto_cycle))) {
       const minDelay = 10000 / debuff.strength; // strength is cycles per 10s
       if (this.autoCycleLastTick + minDelay < now) {
         this.autoCycleLastTick = now;
@@ -195,7 +201,20 @@ export class PlayerController {
     }
   }
 
-  handleKey(isMyTurn: boolean, port: string, key: string, state: KeyState) {
+  handleKey(
+    isMyTurn: boolean,
+    port: string,
+    key: string,
+    state: KeyState,
+    handledDebuffs: Partial<Record<Debuff, boolean>> = {},
+  ): void {
+    // Delay input if input_lag debuff is active
+    let debuff;
+    if (!handledDebuffs.input_lag && (debuff = this.findDebuff(Debuff.input_lag))) {
+      const delay = (0.5 + 0.5 * Math.random()) * debuff.strength;
+      setTimeout(() => this.handleKey(isMyTurn, port, key, state, { ...handledDebuffs, input_lag: true }), delay);
+      return;
+    }
     // Input debuffs:
     if (this.hasDebuff(Debuff.key_shift)) {
       // Shift keys to the right by one (Q->W, W->E, ..., P->[, [->], ]->Q) where possible.
@@ -226,6 +245,15 @@ export class PlayerController {
           row: this.editor.row,
           col: this.editor.col,
         });
+        let debuff;
+        if (
+          action === "edit" &&
+          !handledDebuffs.random_duplicate &&
+          (debuff = this.findDebuff(Debuff.random_duplicate)) &&
+          Math.random() * 100 < debuff.strength
+        ) {
+          this.handleKey(isMyTurn, port, key, state, { ...handledDebuffs, random_duplicate: true });
+        }
         break;
       }
       case "submit":
@@ -242,15 +270,14 @@ export class PlayerController {
         }
         break;
     }
-    return action;
   }
 
-  handleKeyboardEvent(evt: KeyboardEvent) {
+  handleKeyboardEvent(evt: KeyboardEvent): void {
     const [key, state] = mapKeyboardEvent(evt);
-    return this.handleKey(false, "local", key, state);
+    this.handleKey(false, "local", key, state);
   }
 
-  handleKeyboardMessage(msg: KeyboardServerMessage) {
+  handleKeyboardMessage(msg: KeyboardServerMessage): void {
     switch (msg.type) {
       case "keyboards":
         // Initial keyboard list from server
@@ -261,7 +288,7 @@ export class PlayerController {
           currentKeyboard: this.turnTracker.currentKeyboard,
           keyboardList: this.turnTracker.seenKeyboards.slice(),
         });
-        return false;
+        break;
       case "keyboard":
         // Keyboard added/removed
         if (msg.action === "added") {
@@ -273,10 +300,10 @@ export class PlayerController {
           currentKeyboard: this.turnTracker.currentKeyboard,
           keyboardList: this.turnTracker.seenKeyboards.slice(),
         });
-        return false;
+        break;
       case "key": {
         // Ignore events while window is not focused
-        if (!document.hasFocus()) return false;
+        if (!document.hasFocus()) break;
         // Key event
         let { port, state, key } = msg; // eslint-disable-line prefer-const
         key = key.slice(4); // remove "KEY_" prefix
@@ -293,11 +320,12 @@ export class PlayerController {
         } else {
           isMyTurn = this.turnTracker.isMyTurn(port);
         }
-        return this.handleKey(isMyTurn, port, key, state);
+        this.handleKey(isMyTurn, port, key, state);
+        break;
       }
       default:
         console.warn("Unhandled message from keyboard server:", msg);
-        return false;
+        break;
     }
   }
 

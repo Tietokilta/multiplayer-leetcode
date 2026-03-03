@@ -69,10 +69,10 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "Reverses the direction of navigation keys.",
   },
   [Debuff.input_lag]: {
-    // TODO
     type: "input2",
     title: "KUKA SIIN NETIS ON",
     description: "Causes random input lag.",
+    maxStrength: 2000, // ms of lag
   },
   [Debuff.key_shift]: {
     type: "input3",
@@ -85,16 +85,15 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "Hides the cursor.",
   },
   [Debuff.random_duplicate]: {
-    // TODO
     type: "input5",
     title: "Sticky Keys",
     description: "Randomly duplicates typed characters.",
-    maxStrength: 100, // % chance
+    maxStrength: 50, // % chance
   },
   [Debuff.caps_lock]: {
     // TODO
     type: "input6",
-    title: "Cruise Control for Cool",
+    title: "CRUISE CONTROL FOR COOL",
     description: "Pretends Caps Lock is on.",
   },
   [Debuff.cursor_shift]: {
