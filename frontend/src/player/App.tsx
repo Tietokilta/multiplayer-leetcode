@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useInterval, useLocalStorage } from "usehooks-ts";
 import { stateColors } from "../connection";
 import { DebuffQueue } from "./DebuffQueue";
@@ -47,6 +47,18 @@ function App() {
     useCallback(() => controller.tick(), [controller]),
     500,
   );
+
+  const activeDebuffs = controller.usePlayerStore((state) => state.activeDebuffNames);
+  useLayoutEffect(() => {
+    for (const debuff of activeDebuffs) {
+      document.documentElement.classList.add(`debuff-${debuff}`);
+    }
+    return () => {
+      for (const debuff of activeDebuffs) {
+        document.documentElement.classList.remove(`debuff-${debuff}`);
+      }
+    };
+  }, [activeDebuffs]);
 
   const gameConnected = controller.usePlayerStore((state) => state.connected);
   const gameHasConnected = controller.usePlayerStore((state) => state.hasBeenConnected);

@@ -4,6 +4,7 @@ export type DebuffInfo = {
   description: string;
   maxStrength?: number;
 };
+
 const debuffs = {
   // Input order debuffs:
   random_order: {
@@ -139,7 +140,7 @@ const debuffs = {
   },
   nausea: {
     type: "visual",
-    title: "Motion Sickness",
+    title: "Rough Seas",
     description: "Minecraft-like nausea effect on the editor.",
   },
 

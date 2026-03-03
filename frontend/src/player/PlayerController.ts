@@ -1,12 +1,20 @@
 import { createRef, type ReactNode } from "react";
 import { create } from "zustand";
 import { GameServerHandler, type ConnState } from "../connection";
-import type { KeyboardServerMessage, PlayerCmd, PlayerMessage, PuzzleMessage, StateMessage } from "../messages";
-import { EditorState, type EditorAction } from "./Editor";
-import { KeyboardServerHandler } from "./KeyboardServerHandler";
-import { TurnTracker } from "./TurnTracker";
-import { keyToRow } from "../keyboards";
 import type { DebuffName } from "../debuffs";
+import { keyToRow, nextKeyRight, reverseNavigationKeys } from "../keyboards";
+import type {
+  KeyboardServerMessage,
+  KeyState,
+  PlayerCmd,
+  PlayerMessage,
+  PuzzleMessage,
+  StateMessage,
+} from "../messages";
+import { EditorState } from "./Editor";
+import { KeyboardServerHandler } from "./KeyboardServerHandler";
+import { mapKeyboardEvent } from "./LocalKeyboard";
+import { TurnTracker } from "./TurnTracker";
 
 export type ActiveDebuff = {
   name: string;
@@ -176,7 +184,19 @@ export class PlayerController {
     }
   }
 
-  handleEditorAction(isMyTurn: boolean, action: EditorAction) {
+  handleKey(isMyTurn: boolean, port: string, key: string, state: KeyState) {
+    // Input debuffs:
+    if (this.hasDebuff("key_shift")) {
+      // Shift keys to the right by one (Q->W, W->E, ..., P->[, [->], ]->Q) where possible.
+      key = nextKeyRight[key] ?? key;
+    }
+    if (this.hasDebuff("reverse_navigation")) {
+      // Reverse navigation keys (LEFT<->RIGHT, UP<->DOWN, HOME<->END, PGDN<->PGUP)
+      key = reverseNavigationKeys[key] ?? key;
+    }
+
+    const action = this.editor.act(port, key, state, !isMyTurn);
+
     switch (action) {
       case "edit":
       case "navigate":
@@ -214,8 +234,8 @@ export class PlayerController {
   }
 
   handleKeyboardEvent(evt: KeyboardEvent) {
-    const action = this.editor.actLocal(evt);
-    return this.handleEditorAction(false, action);
+    const [key, state] = mapKeyboardEvent(evt);
+    return this.handleKey(false, "local", key, state);
   }
 
   handleKeyboardMessage(msg: KeyboardServerMessage) {
@@ -246,8 +266,12 @@ export class PlayerController {
         // Ignore events while window is not focused
         if (!document.hasFocus()) return false;
         // Key event
-        const { port, state, key } = msg;
+        let { port, state, key } = msg; // eslint-disable-line prefer-const
+        key = key.slice(4); // remove "KEY_" prefix
+
         this.turnTracker.registerKeyboard(port);
+
+        // Turn order determination:
         let isMyTurn;
         if (this.hasDebuff("row_by_row")) {
           // In row_by_row, turn is determined by the row of the key pressed, instead of the keyboard
@@ -257,8 +281,7 @@ export class PlayerController {
         } else {
           isMyTurn = this.turnTracker.isMyTurn(port);
         }
-        const action = this.editor.act(port, key, state, !isMyTurn);
-        return this.handleEditorAction(isMyTurn, action);
+        return this.handleKey(isMyTurn, port, key, state);
       }
       default:
         console.warn("Unhandled message from keyboard server:", msg);

@@ -20,7 +20,7 @@ function Game({ outputRef, controller }: Props) {
   return (
     <>
       {puzzle ? (
-        <div className="border rounded p-4 flex flex-col gap-2">
+        <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
           <h2 className="font-bold text-xl">{puzzle.title}</h2>
           <Markdown>{puzzle.description}</Markdown>
         </div>
@@ -28,11 +28,11 @@ function Game({ outputRef, controller }: Props) {
         <div className="border rounded p-4 text-red-500">The server currently has no puzzle loaded.</div>
       )}
       <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-        <div className="border rounded p-4">
+        <div className="border rounded p-4 mlc--editor">
           <h2 className="font-bold text-lg mb-2">Code</h2>
           {rendered}
         </div>
-        <div className="border rounded p-4 flex flex-col gap-2 min-h-0">
+        <div className="border rounded p-4 flex flex-col gap-2 min-h-0 debuff-nausea mlc--output">
           {(submissionState === null || submissionState === "invalid") && (
             <div className="text-blue-500 font-bold animate-[pulse_ease_2s_infinite]">
               Press Ctrl+Enter to submit{isOutputScrolling && ", Ctrl+Up/Down to scroll output"}

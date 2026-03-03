@@ -2,8 +2,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Debuff queue exit animation */
+/* Debuff queue enter/exit animation */
 /* CSSTransition applies classes directly to .debuff-item-wrapper */
+.debuff-item-enter .debuff-inner {
+  opacity: 0;
+}
+
+.debuff-item-enter-active .debuff-inner {
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
 .debuff-item-exit {
   overflow: hidden;
   max-width: 300px;
@@ -15,10 +24,42 @@
 }
 
 .debuff-item-exit .debuff-inner {
-  transition: transform 300ms ease, opacity 300ms ease;
+  transition:
+    transform 300ms ease,
+    opacity 300ms ease;
 }
 
 .debuff-item-exit-active .debuff-inner {
   transform: translateX(-120%);
   opacity: 0;
+}
+
+html.debuff-flip_horizontal .mlc--editor {
+  scale: -1 1;
+}
+
+html.debuff-flip_vertical .mlc--editor {
+  scale: 1 -1;
+}
+
+html.debuff-nausea .mlc--puzzle {
+  animation: nausea 5s infinite linear;
+}
+html.debuff-nausea .mlc--editor {
+  animation: nausea 5s infinite linear;
+  animation-delay: -1.3s;
+  animation-direction: reverse;
+}
+html.debuff-nausea .mlc--output {
+  animation: nausea 5s infinite linear;
+  animation-delay: -2.7s;
+}
+
+@keyframes nausea {
+  0% {
+    transform: rotate(0deg) scale(0.8, 1) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) scale(0.8, 1) rotate(-360deg);
+  }
 }

@@ -1,38 +1,10 @@
 import type { ReactNode } from "react";
 import { finnishLayout, type KeyboardLayout } from "../keyboards";
-import type { EditorMessage } from "../messages";
+import type { EditorMessage, KeyState } from "../messages";
 import type { PlayerController, PlayerState } from "./PlayerController";
 
-// Most keys map from KeyboardEvent.code to evdev key names just by uppercasing and
-// prepending "KEY_", but some need special handling:
-const keyMapping: Record<string, string> = {
-  ArrowLeft: "KEY_LEFT",
-  ArrowRight: "KEY_RIGHT",
-  ArrowUp: "KEY_UP",
-  ArrowDown: "KEY_DOWN",
-  ControlLeft: "KEY_LEFTCTRL",
-  ControlRight: "KEY_RIGHTCTRL",
-  ShiftLeft: "KEY_LEFTSHIFT",
-  ShiftRight: "KEY_RIGHTSHIFT",
-  AltRight: "KEY_RIGHTALT",
-  BracketLeft: "KEY_LEFTBRACE",
-  BracketRight: "KEY_RIGHTBRACE",
-  Period: "KEY_DOT",
-  Quote: "KEY_APOSTROPHE",
-  IntlBackslash: "KEY_102ND",
-};
-
 // These keys cannot be "messed up" and are always active
-const navigationKeys = new Set([
-  "KEY_LEFT",
-  "KEY_RIGHT",
-  "KEY_UP",
-  "KEY_DOWN",
-  "KEY_HOME",
-  "KEY_END",
-  "KEY_PAGEUP",
-  "KEY_PAGEDOWN",
-]);
+const navigationKeys = new Set(["LEFT", "RIGHT", "UP", "DOWN", "HOME", "END", "PAGEUP", "PAGEDOWN"]);
 
 const tabSize = 2;
 
@@ -100,31 +72,23 @@ export class EditorState {
     return Math.min(this.col, this.line.length);
   }
 
-  actLocal(evt: KeyboardEvent, messUp: boolean = false): EditorAction {
-    // Map KeyboardEvent.code to evdev key names
-    const key = keyMapping[evt.code] || `KEY_${evt.code.replace(/^Key|^Digit/, "").toUpperCase()}`;
-    // Map event type to state
-    const state = evt.type === "keyup" ? "up" : evt.repeat ? "hold" : "down";
-    return this.act("local", key, state, messUp);
-  }
-
-  act(keyboard: string, key: string, state: "down" | "up" | "hold", messUp: boolean = false): EditorAction {
+  act(keyboard: string, key: string, state: KeyState, messUp: boolean = false): EditorAction {
     const layout = this.layouts.get(keyboard) || finnishLayout;
 
     // Track modifier keys
-    if (key === "KEY_LEFTCTRL" || key === "KEY_RIGHTCTRL") {
+    if (key === "LEFTCTRL" || key === "RIGHTCTRL") {
       this.ctrl = state !== "up";
       return false;
     }
-    if (key === "KEY_LEFTSHIFT" || key === "KEY_RIGHTSHIFT") {
+    if (key === "LEFTSHIFT" || key === "RIGHTSHIFT") {
       this.shift = state !== "up";
       return false;
     }
-    if (key === "KEY_RIGHTALT") {
+    if (key === "RIGHTALT") {
       this.altGr = state !== "up";
       return false;
     }
-    if (key === "KEY_LEFTMETA" || key === "KEY_RIGHTMETA") {
+    if (key === "LEFTMETA" || key === "RIGHTMETA") {
       this.meta = state !== "up";
       return false;
     }
@@ -136,9 +100,9 @@ export class EditorState {
     if (this.meta) return false;
 
     // Special actions
-    if (this.ctrl && key === "KEY_ENTER") return "submit";
-    if (this.ctrl && key === "KEY_UP") return "ctrl_up";
-    if (this.ctrl && key === "KEY_DOWN") return "ctrl_down";
+    if (this.ctrl && key === "ENTER") return "submit";
+    if (this.ctrl && key === "UP") return "ctrl_up";
+    if (this.ctrl && key === "DOWN") return "ctrl_down";
 
     // If messing up and not a navigation key, press something random
     if (messUp && !navigationKeys.has(key)) {
@@ -150,12 +114,12 @@ export class EditorState {
         "DELETE",
         "SPACE",
       ];
-      key = "KEY_" + choices[Math.floor(Math.random() * choices.length)];
+      key = choices[Math.floor(Math.random() * choices.length)];
     }
 
     switch (key) {
       // Navigation keys
-      case "KEY_LEFT":
+      case "LEFT":
         if (this.realCol > 0) {
           this.col = this.realCol - 1;
         } else if (this.row > 0) {
@@ -163,7 +127,7 @@ export class EditorState {
           this.col = this.line.length;
         }
         return "navigate";
-      case "KEY_RIGHT":
+      case "RIGHT":
         if (this.col < this.line.length) {
           this.col = this.realCol + 1;
         } else if (this.row < this.code.length - 1) {
@@ -171,41 +135,41 @@ export class EditorState {
           this.col = 0;
         }
         return "navigate";
-      case "KEY_UP":
+      case "UP":
         if (this.row > 0) {
           this.row--;
         } else {
           this.col = 0;
         }
         return "navigate";
-      case "KEY_DOWN":
+      case "DOWN":
         if (this.row < this.code.length - 1) {
           this.row++;
         }
         return "navigate";
-      case "KEY_HOME":
+      case "HOME":
         if (this.ctrl) {
           this.row = 0;
         }
         this.col = 0;
         return "navigate";
-      case "KEY_END":
+      case "END":
         if (this.ctrl) {
           this.row = this.code.length - 1;
         }
         this.col = this.line.length;
         return "navigate";
-      case "KEY_PAGEUP":
+      case "PAGEUP":
         this.row = 0;
         this.col = 0;
         return "navigate";
-      case "KEY_PAGEDOWN":
+      case "PAGEDOWN":
         this.row = this.code.length - 1;
         this.col = this.line.length;
         return "navigate";
 
       // Editing keys
-      case "KEY_BACKSPACE":
+      case "BACKSPACE":
         if (this.realCol > 0) {
           const isOnlyWhitespace = /^\s+$/.test(this.lineBeforeCursor.join(""));
           // If only whitespace, remove up to previous tab stop
@@ -219,7 +183,7 @@ export class EditorState {
           this.line = this.line.concat(currLine);
         }
         return "edit";
-      case "KEY_DELETE":
+      case "DELETE":
         if (this.shift) return false; // ignore shift+delete, usually means "cut"
 
         if (this.realCol < this.line.length) {
@@ -229,14 +193,14 @@ export class EditorState {
           this.line = this.line.concat(nextLine);
         }
         return "edit";
-      case "KEY_TAB": {
+      case "TAB": {
         // Insert spaces until next tab stop
         const spaces = " ".repeat(tabSize - (this.realCol % tabSize)).split("");
         this.line.splice(this.realCol, 0, ...spaces);
         this.col = this.realCol + spaces.length;
         return "edit";
       }
-      case "KEY_ENTER": {
+      case "ENTER": {
         // Look at content before cursor to determine indentation
         const beforeCursorString = this.lineBeforeCursor.join("");
         let indentSize = beforeCursorString.match(/^\s*/)?.[0].length || 0;
@@ -264,18 +228,17 @@ export class EditorState {
         // Ignore Ctrl+key combinations
         if (this.ctrl) return false;
 
-        const name = key.slice(4); // remove "KEY_"
         let char = this.altGr
           ? this.shift
-            ? layout.shiftedAltGr[name]
-            : layout.altGr[name]
+            ? layout.shiftedAltGr[key]
+            : layout.altGr[key]
           : this.shift
-            ? layout.shifted[name]
-            : layout.normal[name];
+            ? layout.shifted[key]
+            : layout.normal[key];
 
         // When messing up, ignore AltGrs that don't produce a character
         if (messUp && this.altGr && !char) {
-          char = this.shift ? layout.shifted[name] : layout.normal[name];
+          char = this.shift ? layout.shifted[key] : layout.normal[key];
         }
 
         if (char) {
