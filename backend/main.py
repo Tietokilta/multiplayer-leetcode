@@ -1,6 +1,7 @@
 import asyncio
 import json
 import signal
+import time
 import traceback
 from dataclasses import dataclass, field
 from logging import DEBUG, INFO, basicConfig, getLogger
@@ -60,7 +61,16 @@ class AdminReloadPuzzlesCmd(TypedDict):
     type: Literal["reload_puzzles"]
 
 
-type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd
+class AdminDebuffCmd(TypedDict):
+    type: Literal["administer_debuff"]
+    players: list[str]
+    name: str
+    debuff_type: str
+    strength: float
+    duration: float
+
+
+type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd
 
 
 class WelcomeMessage(TypedDict):
@@ -149,7 +159,25 @@ class SpectateOutputMessage(TypedDict):
     content: str
 
 
-type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage
+class DebuffItem(TypedDict):
+    name: str
+    type: str
+    strength: float
+    duration: float  # remaining seconds from now
+
+
+class DebuffMessage(TypedDict):
+    type: Literal["debuffs"]
+    debuffs: list[DebuffItem]
+
+
+class SpectateDebuffMessage(TypedDict):
+    type: Literal["spectate_debuffs"]
+    player: str
+    debuffs: list[DebuffItem]
+
+
+type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage
 
 
 async def run_code(
@@ -271,6 +299,15 @@ async def run_code(
 
 
 @dataclass
+class Debuff:
+    name: str
+    debuff_type: str
+    strength: float
+    start: float  # time.monotonic() when administered
+    duration: float  # total duration in seconds
+
+
+@dataclass
 class Player:
     name: str
     score: int
@@ -279,6 +316,7 @@ class Player:
     row: int
     conn_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     tx_queue: asyncio.Queue[WsMessage | None] | None = None
+    debuffs: list[Debuff] = field(default_factory=list[Debuff])
 
     def editor_json(self) -> PlayerJson:
         """Returns the current editor state as JSON."""
@@ -287,6 +325,23 @@ class Player:
             "code": self.code,
             "row": self.row,
             "col": self.col,
+        }
+
+    def debuffs_json(self) -> DebuffMessage:
+        """Returns active debuffs with remaining durations as JSON."""
+        now = time.monotonic()
+        return {
+            "type": "debuffs",
+            "debuffs": [
+                {
+                    "name": d.name,
+                    "type": d.debuff_type,
+                    "strength": d.strength,
+                    "duration": d.start + d.duration - now,
+                }
+                for d in self.debuffs
+                if d.start + d.duration > now
+            ],
         }
 
     def send(self, message: WsMessage):
@@ -578,7 +633,7 @@ class PlayerManager:
             except Exception:
                 pass  # Ignore send errors
 
-    def notify_spectators(self, player_name: str, message: CodeRunOutput | CodeRunState | EditCmd):
+    def notify_spectators(self, player_name: str, message: CodeRunOutput | CodeRunState | EditCmd | DebuffMessage):
         """Sends a message to all admins spectating a specific player."""
 
         converted: WsMessage
@@ -598,6 +653,12 @@ class PlayerManager:
             converted = {
                 **message,
                 "type": "spectate_editor",
+                "player": player_name,
+            }
+        elif message["type"] == "debuffs":
+            converted = {
+                **message,
+                "type": "spectate_debuffs",
                 "player": player_name,
             }
         else:
@@ -662,6 +723,48 @@ class PlayerManager:
         log.info(f"Removed player: {name}")
         return None
 
+    def administer_debuff(self, cmd: AdminDebuffCmd) -> ActionError | None:
+        """Administers a debuff to the listed players. Duration stacks with existing same-type debuffs."""
+        now = time.monotonic()
+        found_any = False
+        for player_name in cmd["players"]:
+            player = self.players.get(player_name)
+            if not player:
+                continue
+            found_any = True
+            # Remove expired debuffs
+            player.debuffs = [d for d in player.debuffs if d.start + d.duration > now]
+            # Find longest remaining duration of same-type debuffs to stack with
+            same_type = [d for d in player.debuffs if d.debuff_type == cmd["debuff_type"]]
+            extra = max((d.start + d.duration - now for d in same_type), default=0.0)
+            duration = cmd["duration"] + extra
+            # Administer new debuff
+            player.debuffs.append(
+                Debuff(
+                    name=cmd["name"],
+                    debuff_type=cmd["debuff_type"],
+                    strength=cmd["strength"],
+                    start=now,
+                    duration=duration,
+                )
+            )
+            msg: DebuffMessage = {
+                "type": "debuffs",
+                "debuffs": [
+                    {
+                        "name": cmd["name"],
+                        "type": cmd["debuff_type"],
+                        "strength": cmd["strength"],
+                        "duration": duration,
+                    }
+                ],
+            }
+            player.send(msg)
+            self.notify_spectators(player_name, msg)
+        if not found_any:
+            return {"type": "error", "message": "No such player"}
+        return None
+
 
 async def send(ws: ServerConnection, message: WsMessage):
     """Sends a JSON message over the websocket."""
@@ -719,6 +822,9 @@ async def ws_handler(
                                         "content": sub.output,
                                     },
                                 )
+                            # Send active debuffs
+                            p_debuffs = p.debuffs_json()
+                            await send(ws, {**p_debuffs, "type": "spectate_debuffs", "player": name})
                     elif msg["type"] == "change_puzzle":
                         log.info(f"Admin changing puzzle to {msg['puzzle']}")
                         if error := await manager.switch_puzzle(msg["puzzle"], expire_submissions=True):
@@ -735,6 +841,9 @@ async def ws_handler(
                     elif msg["type"] == "reload_puzzles":
                         await manager.reload_puzzles()
                         await send(ws, manager.get_puzzle_list())
+                    elif msg["type"] == "administer_debuff":
+                        if error := manager.administer_debuff(msg):
+                            await send(ws, error)
                     else:
                         await send(ws, {"type": "error", "message": "unknown admin action"})
 
@@ -794,6 +903,8 @@ async def ws_handler(
                     if submission := manager.submissions.get(name):
                         await send(ws, {"type": "state", "state": submission.status, "error": submission.error})
                         await send(ws, {"type": "output", "content": submission.output})
+                    # Send active debuffs
+                    await send(ws, player.debuffs_json())
 
                 # Unknown action, not logged in
                 else:

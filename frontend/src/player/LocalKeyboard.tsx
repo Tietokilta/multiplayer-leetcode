@@ -1,25 +1,18 @@
 import { useEffect } from "react";
-import type { EditorAction, EditorState } from "./Editor";
-import type { TurnTracker } from "./TurnTracker";
-import { usePlayerStore } from "./store";
+import type { PlayerController } from "./PlayerController";
 
 type Props = {
-  editor: EditorState;
-  turnTracker: TurnTracker;
-  handleEditorAction: (action: EditorAction) => void;
+  controller: PlayerController;
 };
 
-const LocalKeyboard = ({ editor, turnTracker, handleEditorAction }: Props) => {
-  const handleKeyboardEvent = usePlayerStore((state) => state.handleKeyboardEvent);
-
+const LocalKeyboard = ({ controller }: Props) => {
   useEffect(() => {
     const handleKeyEvent = (evt: KeyboardEvent) => {
       // Prevent default browser behavior for Tab key
       if (evt.code === "Tab") {
         evt.preventDefault();
       }
-      const action = handleKeyboardEvent(editor, turnTracker, evt);
-      handleEditorAction(action);
+      controller.handleKeyboardEvent(evt);
     };
     window.addEventListener("keydown", handleKeyEvent);
     window.addEventListener("keyup", handleKeyEvent);
@@ -27,7 +20,7 @@ const LocalKeyboard = ({ editor, turnTracker, handleEditorAction }: Props) => {
       window.removeEventListener("keydown", handleKeyEvent);
       window.removeEventListener("keyup", handleKeyEvent);
     };
-  }, [editor, turnTracker, handleEditorAction, handleKeyboardEvent]);
+  }, [controller]);
   return null;
 };
 

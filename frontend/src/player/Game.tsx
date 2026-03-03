@@ -1,13 +1,14 @@
 import { type RefObject, useEffect, useState } from "react";
 import Markdown from "react-markdown";
-import { usePlayerStore } from "./store";
+import type { PlayerController } from "./PlayerController";
 
 type Props = {
   outputRef: RefObject<HTMLPreElement | null>;
+  controller: PlayerController;
 };
 
-function Game({ outputRef }: Props) {
-  const { puzzle, output, submissionState, submissionError, rendered } = usePlayerStore();
+function Game({ outputRef, controller }: Props) {
+  const { puzzle, output, submissionState, submissionError, rendered } = controller.usePlayerStore();
   const [isOutputScrolling, setIsOutputScrolling] = useState(false);
 
   useEffect(() => {

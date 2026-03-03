@@ -1,7 +1,14 @@
+import type { KeyboardServerHandler } from "./KeyboardServerHandler";
+
 export class TurnTracker {
+  keyboardServer?: KeyboardServerHandler;
   seenKeyboards: string[] = [];
   currentTurnIndex: number = 0;
   ignoreWrongOrder: boolean = false;
+
+  constructor(keyboardServer?: KeyboardServerHandler) {
+    this.keyboardServer = keyboardServer;
+  }
 
   get currentKeyboard(): string | undefined {
     return this.seenKeyboards[this.currentTurnIndex];
@@ -36,6 +43,25 @@ export class TurnTracker {
   advanceTurn() {
     if (this.seenKeyboards.length > 0) {
       this.currentTurnIndex = (this.currentTurnIndex + 1) % this.seenKeyboards.length;
+      this.sendLeds();
+    }
+  }
+
+  randomizeTurn() {
+    if (this.seenKeyboards.length > 1) {
+      const prev = this.currentTurnIndex;
+      this.currentTurnIndex = Math.floor(Math.random() * (this.seenKeyboards.length - 1));
+      if (this.currentTurnIndex >= prev) this.currentTurnIndex++;
+      this.sendLeds();
+    }
+  }
+
+  private sendLeds() {
+    if (this.keyboardServer) {
+      for (const [i, kb] of this.seenKeyboards.entries()) {
+        const on = i === this.currentTurnIndex ? 1 : 0;
+        this.keyboardServer.send([kb, on, on, on]);
+      }
     }
   }
 }

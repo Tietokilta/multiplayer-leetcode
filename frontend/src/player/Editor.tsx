@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { finnishLayout, type KeyboardLayout } from "../keyboards";
 import type { EditorMessage } from "../messages";
-import { usePlayerStore, type PlayerState } from "./store";
+import type { PlayerController, PlayerState } from "./PlayerController";
 
 // Most keys map from KeyboardEvent.code to evdev key names just by uppercasing and
 // prepending "KEY_", but some need special handling:
@@ -284,7 +284,7 @@ export class EditorState {
 
 const selectRendered = (state: PlayerState) => state.rendered;
 
-export const RenderedEditor = () => {
-  const rendered = usePlayerStore(selectRendered);
+export const RenderedEditor = ({ controller }: { controller: PlayerController }) => {
+  const rendered = controller.usePlayerStore(selectRendered);
   return rendered;
 };

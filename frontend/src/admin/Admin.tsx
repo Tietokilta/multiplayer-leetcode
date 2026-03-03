@@ -12,6 +12,8 @@ type AdminCmd =
   | { type: "remove_player"; name: string }
   | { type: "reload_puzzles" };
 
+type DebuffItem = { name: string; type: string; strength: number; duration: number };
+
 type AdminMessage =
   | { type: "admin_welcome" }
   | { type: "puzzles"; puzzles: PuzzleInfo[]; current: string | null }
@@ -19,6 +21,7 @@ type AdminMessage =
   | { type: "spectate_editor"; player: string; code: string; row: number; col: number }
   | { type: "spectate_state"; player: string; state: "running" | "valid" | "invalid" | null }
   | { type: "spectate_output"; player: string; content: string }
+  | { type: "spectate_debuffs"; player: string; debuffs: DebuffItem[] }
   | { type: "error"; message: string };
 
 type PlayerState = {
@@ -27,6 +30,16 @@ type PlayerState = {
   col: number;
   state: "running" | "valid" | "invalid" | null;
   output: string;
+  debuffs: DebuffItem[];
+};
+
+const defaultPlayerState: PlayerState = {
+  code: "",
+  row: 0,
+  col: 0,
+  state: null,
+  output: "",
+  debuffs: [],
 };
 
 const submissionColors = {
@@ -77,38 +90,43 @@ export default function Admin() {
           setPlayerStates((prev) => ({
             ...prev,
             [data.player]: {
+              ...defaultPlayerState,
               ...prev[data.player],
               code: data.code,
               row: data.row,
               col: data.col,
-              state: prev[data.player]?.state ?? null,
-              output: prev[data.player]?.output ?? "",
             },
           }));
           break;
-        case "spectate_state":
+        case "spectate_state": {
           setPlayerStates((prev) => ({
             ...prev,
             [data.player]: {
+              ...defaultPlayerState,
               ...prev[data.player],
-              code: prev[data.player]?.code ?? "",
-              row: prev[data.player]?.row ?? 0,
-              col: prev[data.player]?.col ?? 0,
               state: data.state,
-              output: data.state === "running" || data.state === null ? "" : (prev[data.player]?.output ?? ""),
+              ...(data.state === "running" || data.state === null ? { output: "" } : {}),
             },
           }));
           break;
+        }
         case "spectate_output":
           setPlayerStates((prev) => ({
             ...prev,
             [data.player]: {
+              ...defaultPlayerState,
               ...prev[data.player],
-              code: prev[data.player]?.code ?? "",
-              row: prev[data.player]?.row ?? 0,
-              col: prev[data.player]?.col ?? 0,
-              state: prev[data.player]?.state ?? null,
               output: (prev[data.player]?.output ?? "") + data.content,
+            },
+          }));
+          break;
+        case "spectate_debuffs":
+          setPlayerStates((prev) => ({
+            ...prev,
+            [data.player]: {
+              ...defaultPlayerState,
+              ...prev[data.player],
+              debuffs: data.debuffs,
             },
           }));
           break;
@@ -351,6 +369,18 @@ export default function Admin() {
                   <pre className="bg-gray-800 text-gray-100 p-1 rounded text-xs overflow-auto max-h-20 font-mono">
                     {state.output}
                   </pre>
+                </div>
+              )}
+              {state?.debuffs && state.debuffs.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-xs text-gray-500">Penalties:</div>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {state.debuffs.map((d, i) => (
+                      <span key={i} className="text-xs bg-orange-900/50 text-orange-300 rounded px-1 py-0.5">
+                        {d.name} ({Math.ceil(d.duration)}s)
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
