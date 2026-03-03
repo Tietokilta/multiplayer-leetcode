@@ -19,7 +19,7 @@ const Login = ({ children, onConnect }: Props) => {
     <div className="m-4 border rounded p-4 flex flex-col gap-3">
       <div>Please set the team name and game server IP.</div>
       {serverIpError && (
-        <div className="m-3 text-red-500">
+        <div className="text-red-500">
           Error connecting to server: "{serverIpError}" Please check the IP and try again.
         </div>
       )}

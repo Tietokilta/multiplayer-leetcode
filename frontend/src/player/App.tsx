@@ -74,9 +74,13 @@ function App() {
     <div className="absolute top-6 right-6 flex items-center">
       <span
         className={`w-4 h-4 rounded-full inline-block mr-2 ${stateColors[gameConnected]} cursor-pointer`}
-        onDoubleClick={() => {
-          setMyId("");
-          setServerIp("");
+        onDoubleClick={(evt) => {
+          if (evt.shiftKey) {
+            setMyId("");
+            setServerIp("");
+          } else {
+            setServerIpError("Disconnected by user");
+          }
           controller.server.disconnect();
         }}
       />
