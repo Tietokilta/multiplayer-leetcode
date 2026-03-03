@@ -2,6 +2,11 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+.mlc--cursor {
+  background-color: white;
+  color: black;
+}
+
 /* Debuff queue enter/exit animation */
 /* CSSTransition applies classes directly to .debuff-item-wrapper */
 .debuff-item-enter .debuff-inner {
@@ -62,4 +67,21 @@ html.debuff-nausea .mlc--output {
   100% {
     transform: rotate(360deg) scale(0.8, 1) rotate(-360deg);
   }
+}
+
+html.debuff-cursor_blink .mlc--cursor {
+  animation: cursor-blink 24s step-end infinite;
+}
+
+@import "./generated/blink.css";
+
+html.debuff-fog_of_war .mlc--far > *,
+html.debuff-fog_of_war .mlc--far-char {
+  color: gray;
+  background-color: gray;
+}
+
+html.debuff-invisible_cursor .mlc--cursor {
+  background-color: unset !important;
+  color: unset !important;
 }

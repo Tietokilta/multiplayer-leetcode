@@ -1,23 +1,23 @@
 import { useState } from "react";
-import { debuffInfo, type DebuffName } from "../debuffs";
+import { debuffInfo, type Debuff } from "../debuffs";
 import { PlayerController } from "./PlayerController";
 
-const debuffNames = Object.keys(debuffInfo) as DebuffName[];
+const debuffNames = Object.keys(debuffInfo) as Debuff[];
 
-function initialStrength(name: DebuffName): number {
+function initialStrength(name: Debuff): number {
   const max = debuffInfo[name].maxStrength;
   return max ? Math.ceil(max / 2) : 1;
 }
 
 export function DebuffSelector({ controller }: { controller: PlayerController }) {
-  const [selectedName, setSelectedName] = useState<DebuffName>(debuffNames[0]);
+  const [selectedName, setSelectedName] = useState<Debuff>(debuffNames[0]);
   const [duration, setDuration] = useState(30);
   const [strength, setStrength] = useState(() => initialStrength(debuffNames[0]));
 
   const info = debuffInfo[selectedName];
   const maxStrength = info.maxStrength;
 
-  function handleNameChange(name: DebuffName) {
+  function handleNameChange(name: Debuff) {
     setSelectedName(name);
     setStrength(initialStrength(name));
   }
@@ -36,7 +36,7 @@ export function DebuffSelector({ controller }: { controller: PlayerController })
         <div className="flex flex-col gap-1">
           <select
             value={selectedName}
-            onChange={(e) => handleNameChange(e.target.value as DebuffName)}
+            onChange={(e) => handleNameChange(e.target.value as Debuff)}
             className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
           >
             {debuffNames.map((name) => (
@@ -78,6 +78,12 @@ export function DebuffSelector({ controller }: { controller: PlayerController })
 
         <button onClick={administer} className="text-red-500 underline p-2 rounded cursor-pointer hover:bg-red-500/25">
           Administer
+        </button>
+        <button
+          onClick={() => controller.handleMessage({ type: "debuffs", debuffs: [] })}
+          className="text-gray-400 underline p-2 rounded cursor-pointer hover:bg-gray-500/25"
+        >
+          Clear all
         </button>
       </div>
     </div>

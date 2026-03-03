@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import { Debuff } from "../debuffs";
 import { finnishLayout, type KeyboardLayout } from "../keyboards";
 import type { EditorMessage, KeyState } from "../messages";
-import type { PlayerController, PlayerState } from "./PlayerController";
+import type { PlayerController } from "./PlayerController";
 
 // These keys cannot be "messed up" and are always active
 const navigationKeys = new Set(["LEFT", "RIGHT", "UP", "DOWN", "HOME", "END", "PAGEUP", "PAGEDOWN"]);
@@ -34,22 +35,27 @@ export class EditorState {
     return this.code.map((line) => line.join("")).join("\n");
   }
 
-  render(): ReactNode {
+  render(debuffs: Set<Debuff>): ReactNode {
+    let col = this.realCol;
+    if (debuffs.has(Debuff.cursor_shift)) {
+      // cursor_shift: shift cursor left on even rows, right on odd rows
+      col += this.row % 2 === 0 ? -1 : 1;
+    }
     return this.code.map((line, i) => {
       const isCursorLine = i === this.row;
+      const farFromCursor = Math.abs(i - this.row) > 1;
       return (
-        <div key={i} className="whitespace-pre font-mono">
+        <div key={i} className={`whitespace-pre font-mono mlc--line ${farFromCursor ? "mlc--far" : ""}`}>
           {line.map((char, j) => {
-            const isCursorChar = isCursorLine && j === this.col;
-            return isCursorChar ? (
-              <span key={j} className="bg-white text-black">
+            const isCursorChar = isCursorLine && j === col;
+            const farFromCursorChar = !farFromCursor && Math.abs(j - col) > 3;
+            return (
+              <span key={j} className={isCursorChar ? "mlc--cursor" : farFromCursorChar ? "mlc--far-char" : ""}>
                 {char}
               </span>
-            ) : (
-              <span key={j}>{char}</span>
             );
           })}
-          {isCursorLine && this.col >= line.length && <span className="bg-white text-black"> </span>}
+          {isCursorLine && col >= line.length && <span className="mlc--cursor"> </span>}
           {!isCursorLine && line.length === 0 && <span>&nbsp;</span>}
         </div>
       );
@@ -253,9 +259,7 @@ export class EditorState {
   }
 }
 
-const selectRendered = (state: PlayerState) => state.rendered;
-
 export const RenderedEditor = ({ controller }: { controller: PlayerController }) => {
-  const rendered = controller.usePlayerStore(selectRendered);
+  const rendered = controller.usePlayerStore((state) => state.rendered);
   return rendered;
 };

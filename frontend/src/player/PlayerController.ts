@@ -1,7 +1,7 @@
 import { createRef, type ReactNode } from "react";
 import { create } from "zustand";
 import { GameServerHandler, type ConnState } from "../connection";
-import type { DebuffName } from "../debuffs";
+import { Debuff } from "../debuffs";
 import { keyToRow, nextKeyRight, reverseNavigationKeys } from "../keyboards";
 import type {
   KeyboardServerMessage,
@@ -17,15 +17,15 @@ import { mapKeyboardEvent } from "./LocalKeyboard";
 import { TurnTracker } from "./TurnTracker";
 
 export type ActiveDebuff = {
-  name: string;
+  name: Debuff;
   type: string;
   strength: number;
   endTime: number; // Date.now() + duration * 1000
 };
 
-function activeNamesFromDebuffs(debuffs: ActiveDebuff[]): Set<string> {
+function activeNamesFromDebuffs(debuffs: ActiveDebuff[]): Set<Debuff> {
   const seen = new Set<string>();
-  const names = new Set<string>();
+  const names = new Set<Debuff>();
   for (const d of debuffs) {
     if (!seen.has(d.type)) {
       seen.add(d.type);
@@ -50,7 +50,7 @@ export type PlayerState = {
   keyboardList: string[];
 
   debuffs: ActiveDebuff[];
-  activeDebuffNames: Set<string>;
+  activeDebuffNames: Set<Debuff>;
 };
 
 const example = `function twoSum(nums: number[], target: number): number[] {
@@ -105,9 +105,14 @@ export class PlayerController {
     this.usePlayerStore.setState(slice);
   }
 
-  hasDebuff(...name: DebuffName[]) {
-    const active = this.usePlayerStore.getState().activeDebuffNames;
-    return name.some((n) => active.has(n));
+  private rerender() {
+    const { activeDebuffNames } = this.usePlayerStore.getState();
+    this.update({ rendered: this.editor.render(activeDebuffNames) });
+  }
+
+  hasDebuff(...name: Debuff[]) {
+    const { activeDebuffNames } = this.usePlayerStore.getState();
+    return name.some((n) => activeDebuffNames.has(n));
   }
 
   tick() {
@@ -119,8 +124,8 @@ export class PlayerController {
       setTimeout(() => this.tick(), remaining[0].endTime - now);
     }
 
-    if (this.hasDebuff("auto_cycle")) {
-      const debuff = remaining.find((d) => d.name === "auto_cycle")!;
+    if (this.hasDebuff(Debuff.auto_cycle)) {
+      const debuff = remaining.find((d) => d.name === Debuff.auto_cycle)!;
       const minDelay = 10000 / debuff.strength; // strength is cycles per 10s
       if (this.autoCycleLastTick + minDelay < now) {
         this.autoCycleLastTick = now;
@@ -137,7 +142,7 @@ export class PlayerController {
     switch (data.type) {
       case "editor":
         this.editor.load(data);
-        this.update({ rendered: this.editor.render() });
+        this.rerender();
         break;
       case "puzzle":
         this.update((prev) =>
@@ -157,6 +162,11 @@ export class PlayerController {
         });
         break;
       case "debuffs": {
+        if (data.debuffs.length === 0) {
+          this.update({ debuffs: [], activeDebuffNames: new Set() });
+          this.rerender();
+          break;
+        }
         const now = Date.now();
         const { debuffs: existing } = this.usePlayerStore.getState();
         const debuffs = [
@@ -169,6 +179,7 @@ export class PlayerController {
           })),
         ].sort((a, b) => a.endTime - b.endTime);
         this.update({ debuffs, activeDebuffNames: activeNamesFromDebuffs(debuffs) });
+        this.rerender();
         if (debuffs.length > 0) {
           setTimeout(() => this.tick(), debuffs[0].endTime - now);
         }
@@ -186,11 +197,11 @@ export class PlayerController {
 
   handleKey(isMyTurn: boolean, port: string, key: string, state: KeyState) {
     // Input debuffs:
-    if (this.hasDebuff("key_shift")) {
+    if (this.hasDebuff(Debuff.key_shift)) {
       // Shift keys to the right by one (Q->W, W->E, ..., P->[, [->], ]->Q) where possible.
       key = nextKeyRight[key] ?? key;
     }
-    if (this.hasDebuff("reverse_navigation")) {
+    if (this.hasDebuff(Debuff.reverse_navigation)) {
       // Reverse navigation keys (LEFT<->RIGHT, UP<->DOWN, HOME<->END, PGDN<->PGUP)
       key = reverseNavigationKeys[key] ?? key;
     }
@@ -199,10 +210,10 @@ export class PlayerController {
 
     switch (action) {
       case "edit":
-      case "navigate":
-        this.update({ rendered: this.editor.render() });
-        if (action === "edit" && isMyTurn && !this.hasDebuff("auto_cycle", "row_by_row")) {
-          if (this.hasDebuff("random_order")) this.turnTracker.randomizeTurn();
+      case "navigate": {
+        this.rerender();
+        if (action === "edit" && isMyTurn && !this.hasDebuff(Debuff.auto_cycle, Debuff.row_by_row)) {
+          if (this.hasDebuff(Debuff.random_order)) this.turnTracker.randomizeTurn();
           else this.turnTracker.advanceTurn();
           this.update({
             currentKeyboard: this.turnTracker.currentKeyboard,
@@ -216,6 +227,7 @@ export class PlayerController {
           col: this.editor.col,
         });
         break;
+      }
       case "submit":
         this.server.send({ type: "submit" });
         break;
@@ -273,7 +285,7 @@ export class PlayerController {
 
         // Turn order determination:
         let isMyTurn;
-        if (this.hasDebuff("row_by_row")) {
+        if (this.hasDebuff(Debuff.row_by_row)) {
           // In row_by_row, turn is determined by the row of the key pressed, instead of the keyboard
           const row = keyToRow[key];
           isMyTurn =
@@ -292,7 +304,7 @@ export class PlayerController {
   sendLeds() {
     for (const [i, kb] of this.turnTracker.seenKeyboards.entries()) {
       let leds: [0 | 1, 0 | 1, 0 | 1];
-      if (this.hasDebuff("row_by_row")) {
+      if (this.hasDebuff(Debuff.row_by_row)) {
         // In row_by_row, indicate the row each keyboard controls
         // (111 = numbers, 100 = qwerty, 010 = asdfgh, 001 = zxcvbn)
         leds = [i === 0 || i === 1 ? 1 : 0, i === 0 || i === 2 ? 1 : 0, i === 0 || i === 3 ? 1 : 0];

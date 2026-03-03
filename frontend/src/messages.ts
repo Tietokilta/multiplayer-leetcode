@@ -1,10 +1,12 @@
+import type { Debuff } from "./debuffs";
+
 export type PlayerCmd =
   | { type: "login"; id: string }
   | { type: "edit"; code?: string; row: number; col: number }
   | { type: "submit" };
 
 export type DebuffItem = {
-  name: string;
+  name: Debuff;
   type: string;
   strength: number;
   duration: number; // remaining seconds from now
