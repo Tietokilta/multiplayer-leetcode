@@ -221,7 +221,7 @@ export default function Admin() {
         </div>
         <button
           type="submit"
-          className="bg-blue-500 text-white rounded p-2 w-full disabled:opacity-70"
+          className="text-blue-500 underline p-2 rounded cursor-pointer hover:bg-blue-500/25 w-full disabled:opacity-70"
           disabled={!serverIp || !password || connState === "connecting"}
         >
           Connect

@@ -1,3 +1,24 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Debuff queue exit animation */
+/* CSSTransition applies classes directly to .debuff-item-wrapper */
+.debuff-item-exit {
+  overflow: hidden;
+  max-width: 300px;
+  transition: max-width 300ms ease;
+}
+
+.debuff-item-exit-active {
+  max-width: 0;
+}
+
+.debuff-item-exit .debuff-inner {
+  transition: transform 300ms ease, opacity 300ms ease;
+}
+
+.debuff-item-exit-active .debuff-inner {
+  transform: translateX(-120%);
+  opacity: 0;
+}

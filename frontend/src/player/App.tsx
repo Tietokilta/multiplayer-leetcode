@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInterval, useLocalStorage } from "usehooks-ts";
 import { stateColors } from "../connection";
+import { DebuffQueue } from "./DebuffQueue";
+import { DebuffSelector } from "./DebuffSelector";
 import { RenderedEditor } from "./Editor";
 import Game from "./Game";
 import LocalKeyboard from "./LocalKeyboard";
@@ -11,7 +13,7 @@ function KeyboardList({ controller }: { controller: PlayerController }) {
   const current = controller.usePlayerStore((state) => state.currentKeyboard);
   const keyboards = controller.usePlayerStore((state) => state.keyboardList);
   return (
-    <div className="m-3 font-mono text-sm">
+    <div className="ml-3 font-mono text-sm">
       <div className="mb-2">Keyboards ({keyboards.length}):</div>
       {keyboards.map((kb, i) => (
         <div key={kb} className={`${kb === current ? "text-green-400 font-bold" : "text-gray-500"}`}>
@@ -172,8 +174,10 @@ function App() {
     <div className="flex flex-col p-4 gap-4 h-screen">
       {connState}
       {localKeyboard}
+      {debuffTestMode && <DebuffSelector controller={controller} />}
       {showKeyboards && <KeyboardList controller={controller} />}
       <Game outputRef={outputRef} controller={controller} />
+      <DebuffQueue controller={controller} />
     </div>
   );
 }

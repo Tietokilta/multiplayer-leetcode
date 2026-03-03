@@ -5,6 +5,27 @@ import type { KeyboardServerMessage, PlayerCmd, PlayerMessage, PuzzleMessage, St
 import { EditorState, type EditorAction } from "./Editor";
 import { KeyboardServerHandler } from "./KeyboardServerHandler";
 import { TurnTracker } from "./TurnTracker";
+import { keyToRow } from "../keyboards";
+import type { DebuffName } from "../debuffs";
+
+export type ActiveDebuff = {
+  name: string;
+  type: string;
+  strength: number;
+  endTime: number; // Date.now() + duration * 1000
+};
+
+function activeNamesFromDebuffs(debuffs: ActiveDebuff[]): Set<string> {
+  const seen = new Set<string>();
+  const names = new Set<string>();
+  for (const d of debuffs) {
+    if (!seen.has(d.type)) {
+      seen.add(d.type);
+      names.add(d.name);
+    }
+  }
+  return names;
+}
 
 export type PlayerState = {
   connected: ConnState;
@@ -19,6 +40,9 @@ export type PlayerState = {
   keyboardConnected: ConnState;
   currentKeyboard: string | undefined;
   keyboardList: string[];
+
+  debuffs: ActiveDebuff[];
+  activeDebuffNames: Set<string>;
 };
 
 const example = `function twoSum(nums: number[], target: number): number[] {
@@ -37,7 +61,11 @@ export class PlayerController {
   server = new GameServerHandler<PlayerCmd, PlayerMessage>();
   keyboardServer = new KeyboardServerHandler();
   editor = new EditorState(example);
-  turnTracker = new TurnTracker(this.keyboardServer);
+  turnTracker = new TurnTracker(this);
+
+  autoCycleLastTick = 0;
+
+  /** Immutable state store, updated from mutable state. */
   usePlayerStore = create<PlayerState>()(() => ({
     connected: "not",
     hasBeenConnected: false,
@@ -51,6 +79,9 @@ export class PlayerController {
     keyboardConnected: "not",
     currentKeyboard: undefined,
     keyboardList: [],
+
+    debuffs: [],
+    activeDebuffNames: new Set(),
   }));
   outputRef = createRef<HTMLPreElement>();
 
@@ -66,7 +97,33 @@ export class PlayerController {
     this.usePlayerStore.setState(slice);
   }
 
-  tick() {}
+  hasDebuff(...name: DebuffName[]) {
+    const active = this.usePlayerStore.getState().activeDebuffNames;
+    return name.some((n) => active.has(n));
+  }
+
+  tick() {
+    const now = Date.now();
+    const { debuffs } = this.usePlayerStore.getState();
+    const remaining = debuffs.filter((d) => d.endTime > now);
+    this.update({ debuffs: remaining, activeDebuffNames: activeNamesFromDebuffs(remaining) });
+    if (remaining.length > 0) {
+      setTimeout(() => this.tick(), remaining[0].endTime - now);
+    }
+
+    if (this.hasDebuff("auto_cycle")) {
+      const debuff = remaining.find((d) => d.name === "auto_cycle")!;
+      const minDelay = 10000 / debuff.strength; // strength is cycles per 10s
+      if (this.autoCycleLastTick + minDelay < now) {
+        this.autoCycleLastTick = now;
+        this.turnTracker.advanceTurn();
+        this.update({
+          currentKeyboard: this.turnTracker.currentKeyboard,
+          keyboardList: this.turnTracker.seenKeyboards.slice(),
+        });
+      }
+    }
+  }
 
   handleMessage(data: PlayerMessage) {
     switch (data.type) {
@@ -91,6 +148,24 @@ export class PlayerController {
           submissionError: data.error ?? null,
         });
         break;
+      case "debuffs": {
+        const now = Date.now();
+        const { debuffs: existing } = this.usePlayerStore.getState();
+        const debuffs = [
+          ...existing,
+          ...data.debuffs.map((d) => ({
+            name: d.name,
+            type: d.type,
+            strength: d.strength,
+            endTime: now + d.duration * 1000,
+          })),
+        ].sort((a, b) => a.endTime - b.endTime);
+        this.update({ debuffs, activeDebuffNames: activeNamesFromDebuffs(debuffs) });
+        if (debuffs.length > 0) {
+          setTimeout(() => this.tick(), debuffs[0].endTime - now);
+        }
+        break;
+      }
       case "error":
         console.error("Game server error:", data.message);
         this.update({ submissionError: data.message });
@@ -106,8 +181,9 @@ export class PlayerController {
       case "edit":
       case "navigate":
         this.update({ rendered: this.editor.render() });
-        if (action === "edit" && isMyTurn) {
-          this.turnTracker.advanceTurn();
+        if (action === "edit" && isMyTurn && !this.hasDebuff("auto_cycle", "row_by_row")) {
+          if (this.hasDebuff("random_order")) this.turnTracker.randomizeTurn();
+          else this.turnTracker.advanceTurn();
           this.update({
             currentKeyboard: this.turnTracker.currentKeyboard,
             keyboardList: this.turnTracker.seenKeyboards.slice(),
@@ -150,8 +226,8 @@ export class PlayerController {
           this.turnTracker.registerKeyboard(kb);
         }
         this.update({
-          keyboardList: this.turnTracker.seenKeyboards.slice(),
           currentKeyboard: this.turnTracker.currentKeyboard,
+          keyboardList: this.turnTracker.seenKeyboards.slice(),
         });
         return false;
       case "keyboard":
@@ -162,8 +238,8 @@ export class PlayerController {
           this.turnTracker.removeKeyboard(msg.port);
         }
         this.update({
-          keyboardList: this.turnTracker.seenKeyboards.slice(),
           currentKeyboard: this.turnTracker.currentKeyboard,
+          keyboardList: this.turnTracker.seenKeyboards.slice(),
         });
         return false;
       case "key": {
@@ -172,13 +248,36 @@ export class PlayerController {
         // Key event
         const { port, state, key } = msg;
         this.turnTracker.registerKeyboard(port);
-        const isMyTurn = this.turnTracker.isMyTurn(port);
+        let isMyTurn;
+        if (this.hasDebuff("row_by_row")) {
+          // In row_by_row, turn is determined by the row of the key pressed, instead of the keyboard
+          const row = keyToRow[key];
+          isMyTurn =
+            row == null || this.turnTracker.seenKeyboards[row % this.turnTracker.seenKeyboards.length] === port;
+        } else {
+          isMyTurn = this.turnTracker.isMyTurn(port);
+        }
         const action = this.editor.act(port, key, state, !isMyTurn);
         return this.handleEditorAction(isMyTurn, action);
       }
       default:
         console.warn("Unhandled message from keyboard server:", msg);
         return false;
+    }
+  }
+
+  sendLeds() {
+    for (const [i, kb] of this.turnTracker.seenKeyboards.entries()) {
+      let leds: [0 | 1, 0 | 1, 0 | 1];
+      if (this.hasDebuff("row_by_row")) {
+        // In row_by_row, indicate the row each keyboard controls
+        // (111 = numbers, 100 = qwerty, 010 = asdfgh, 001 = zxcvbn)
+        leds = [i === 0 || i === 1 ? 1 : 0, i === 0 || i === 2 ? 1 : 0, i === 0 || i === 3 ? 1 : 0];
+      } else {
+        const on = i === this.turnTracker.currentTurnIndex ? 1 : 0;
+        leds = [on, on, on];
+      }
+      this.keyboardServer.send([kb, ...leds]);
     }
   }
 }

@@ -165,7 +165,6 @@ async def ws_handler(
     async def receive():
         try:
             async for msg in websocket:
-                print(msg)
                 try:
                     msg = json.loads(msg)
                     assert isinstance(msg, list) and len(msg) == 4

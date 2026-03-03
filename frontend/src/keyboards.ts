@@ -114,3 +114,23 @@ export const finnishLayout: KeyboardLayout = (() => {
   };
   return { normal, shifted, altGr, shiftedAltGr };
 })();
+
+export const keyToRow: Record<string, number> = {
+  ...Object.fromEntries("1234567890".split("").map((k) => [`KEY_${k}`, 0])),
+  ...Object.fromEntries("QWERTYUIOP".split("").map((k) => [`KEY_${k}`, 1])),
+  ...Object.fromEntries("ASDFGHJKL".split("").map((k) => [`KEY_${k}`, 2])),
+  ...Object.fromEntries("ZXCVBNM".split("").map((k) => [`KEY_${k}`, 3])),
+  KEY_GRAVE: 0,
+  KEY_MINUS: 0,
+  KEY_EQUAL: 0,
+  KEY_TAB: 1,
+  KEY_LEFTBRACE: 1,
+  KEY_RIGHTBRACE: 1,
+  KEY_SEMICOLON: 2,
+  KEY_APOSTROPHE: 2,
+  KEY_BACKSLASH: 2,
+  KEY_COMMA: 3,
+  KEY_DOT: 3,
+  KEY_SLASH: 3,
+  KEY_102ND: 3,
+};
