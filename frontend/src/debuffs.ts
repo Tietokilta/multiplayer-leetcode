@@ -169,12 +169,11 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "Makes the editor shake randomly.",
   },
   [Debuff.lights_out]: {
-    // TODO
     type: "visual",
     title: "Fear of the Dark",
     description: 'Makes the editor dark with a moving "window".',
-    maxStrength: 10, // 1 / size of window relative to editor
-    defaultStrength: 3,
+    maxStrength: 40, // 10 / size of window relative to editor
+    defaultStrength: 20,
   },
   [Debuff.fog_of_war]: {
     type: "visual",

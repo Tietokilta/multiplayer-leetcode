@@ -1,7 +1,7 @@
 import { createRef, useRef, useState, type RefObject } from "react";
 import { CSSTransition, TransitionGroup } from "react-transition-group";
 import { useInterval } from "usehooks-ts";
-import { debuffInfo, type DebuffName } from "../debuffs";
+import { debuffInfo, type Debuff } from "../debuffs";
 import type { PlayerController } from "./PlayerController";
 
 function formatDuration(ms: number): string {
@@ -29,12 +29,12 @@ export function DebuffQueue({ controller }: { controller: PlayerController }) {
   }
 
   return (
-    <div className="flex gap-2 pointer-events-none -mr-4 overflow-hidden">
+    <div className="flex gap-2 pointer-events-none -mr-4 overflow-hidden relative z-100">
       <TransitionGroup component={null}>
         {debuffs.map((debuff) => {
           const key = `${debuff.name}-${debuff.endTime}`;
           const nodeRef = getNodeRef(key);
-          const info = debuffInfo[debuff.name as DebuffName];
+          const info = debuffInfo[debuff.name as Debuff];
           return (
             <CSSTransition key={key} nodeRef={nodeRef} timeout={300} classNames="debuff-item">
               <div ref={nodeRef} className="debuff-item-wrapper">

@@ -1,5 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
+import { Debuff } from "../debuffs";
 import type { PlayerController } from "./PlayerController";
 
 function Screensaver({ controller }: { controller: PlayerController }) {
@@ -29,6 +30,19 @@ type Props = {
   controller: PlayerController;
 };
 
+function LightsOut({ controller }: { controller: PlayerController }) {
+  const debuff = controller.usePlayerStore((state) =>
+    state.activeDebuffNames.has(Debuff.lights_out)
+      ? state.debuffs.find((d) => d.name === Debuff.lights_out)
+      : undefined,
+  );
+  if (!debuff) return null;
+  const radius = Math.round(500 / debuff.strength);
+  return (
+    <div className="absolute inset-0 z-50 mlc--lights-out" style={{ "--sl-r": `${radius}vw` } as React.CSSProperties} />
+  );
+}
+
 function Game({ outputRef, controller }: Props) {
   const { puzzle, output, submissionState, submissionError, rendered } = controller.usePlayerStore();
   const [isOutputScrolling, setIsOutputScrolling] = useState(false);
@@ -42,6 +56,7 @@ function Game({ outputRef, controller }: Props) {
   return (
     <>
       <Screensaver controller={controller} />
+      <LightsOut controller={controller} />
       {puzzle ? (
         <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
           <h2 className="font-bold text-xl">{puzzle.title}</h2>

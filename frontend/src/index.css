@@ -111,6 +111,64 @@
   }
 }
 
+@property --sl-x {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 25%;
+}
+
+@property --sl-y {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 30%;
+}
+
+.mlc--lights-out {
+  background: radial-gradient(circle var(--sl-r, 20vw) at var(--sl-x) var(--sl-y), transparent 100%, black 100%);
+  animation:
+    sl-x 9s ease-in-out infinite,
+    sl-y 7s ease-in-out infinite;
+}
+
+@keyframes sl-x {
+  0% {
+    --sl-x: 25%;
+  }
+  20% {
+    --sl-x: 70%;
+  }
+  45% {
+    --sl-x: 55%;
+  }
+  65% {
+    --sl-x: 20%;
+  }
+  85% {
+    --sl-x: 80%;
+  }
+  100% {
+    --sl-x: 25%;
+  }
+}
+
+@keyframes sl-y {
+  0% {
+    --sl-y: 30%;
+  }
+  25% {
+    --sl-y: 75%;
+  }
+  50% {
+    --sl-y: 20%;
+  }
+  75% {
+    --sl-y: 65%;
+  }
+  100% {
+    --sl-y: 30%;
+  }
+}
+
 html.debuff-flip_horizontal .mlc--editor {
   scale: -1 1;
 }
