@@ -164,12 +164,9 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
 
   // Big visual debuffs:
   [Debuff.shake]: {
-    // TODO
     type: "visual",
     title: "Earthquake Protocol",
     description: "Makes the editor shake randomly.",
-    maxStrength: 50, // px
-    defaultStrength: 20,
   },
   [Debuff.lights_out]: {
     // TODO

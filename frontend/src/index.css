@@ -141,6 +141,18 @@ html.debuff-nausea .mlc--output {
   }
 }
 
+html.debuff-shake .mlc--puzzle {
+  animation: shake 2s infinite;
+}
+html.debuff-shake .mlc--editor {
+  animation: shake 2s infinite;
+}
+html.debuff-shake .mlc--output {
+  animation: shake 2s infinite;
+}
+
+@import "./generated/shake.css";
+
 html.debuff-cursor_blink .mlc--cursor {
   animation: cursor-blink 24s step-end infinite;
 }

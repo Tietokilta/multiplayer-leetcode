@@ -1,0 +1,80 @@
+/* shake_pct=50 amplitude=20 steps=25 spread=45 */
+@keyframes shake {
+  0%,
+  50%,
+  100% {
+    transform: translate(0, 0);
+  }
+  2% {
+    transform: translate(-10px, -5px);
+  }
+  4% {
+    transform: translate(13px, 7px);
+  }
+  6% {
+    transform: translate(-16px, 3px);
+  }
+  8% {
+    transform: translate(11px, 0px);
+  }
+  10% {
+    transform: translate(-10px, -2px);
+  }
+  12% {
+    transform: translate(12px, 2px);
+  }
+  14% {
+    transform: translate(-9px, -11px);
+  }
+  16% {
+    transform: translate(-2px, 16px);
+  }
+  18% {
+    transform: translate(5px, -15px);
+  }
+  20% {
+    transform: translate(4px, 17px);
+  }
+  22% {
+    transform: translate(-14px, -9px);
+  }
+  24% {
+    transform: translate(11px, 7px);
+  }
+  26% {
+    transform: translate(-5px, -11px);
+  }
+  28% {
+    transform: translate(4px, 17px);
+  }
+  30% {
+    transform: translate(9px, -15px);
+  }
+  32% {
+    transform: translate(2px, 14px);
+  }
+  34% {
+    transform: translate(11px, -17px);
+  }
+  36% {
+    transform: translate(-15px, 5px);
+  }
+  38% {
+    transform: translate(18px, 3px);
+  }
+  40% {
+    transform: translate(-10px, -1px);
+  }
+  42% {
+    transform: translate(11px, 2px);
+  }
+  44% {
+    transform: translate(-10px, -5px);
+  }
+  46% {
+    transform: translate(12px, 12px);
+  }
+  48% {
+    transform: translate(-3px, -19px);
+  }
+}
