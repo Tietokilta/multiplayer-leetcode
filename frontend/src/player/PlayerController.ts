@@ -51,6 +51,9 @@ export type PlayerState = {
 
   debuffs: ActiveDebuff[];
   activeDebuffNames: Set<Debuff>;
+
+  screensaverActive: boolean;
+  screensaverTimeout: number | null;
 };
 
 const example = `function twoSum(nums: number[], target: number): number[] {
@@ -90,6 +93,9 @@ export class PlayerController {
 
     debuffs: [],
     activeDebuffNames: new Set(),
+
+    screensaverActive: false,
+    screensaverTimeout: null,
   }));
   outputRef = createRef<HTMLPreElement>();
 
@@ -108,6 +114,24 @@ export class PlayerController {
   private rerender() {
     const { activeDebuffNames } = this.usePlayerStore.getState();
     this.update({ rendered: this.editor.render(activeDebuffNames) });
+  }
+
+  private updateScreensaver(bump: boolean) {
+    const { screensaverTimeout } = this.usePlayerStore.getState();
+    const debuff = this.findDebuff(Debuff.screensaver);
+    if (screensaverTimeout && (!debuff || bump)) {
+      clearTimeout(screensaverTimeout);
+    }
+    if (!debuff) {
+      this.update({ screensaverActive: false, screensaverTimeout: null });
+      return;
+    } else if (bump || !screensaverTimeout) {
+      const delay = 10000 - debuff.strength; // strength is ms of inactivity before screensaver
+      this.update({
+        screensaverActive: false,
+        screensaverTimeout: setTimeout(() => this.update({ screensaverActive: true }), delay),
+      });
+    }
   }
 
   hasDebuff(...name: Debuff[]) {
@@ -129,6 +153,7 @@ export class PlayerController {
     if (remaining.length > 0) {
       setTimeout(() => this.tick(), remaining[0].endTime - now);
     }
+    this.updateScreensaver(false);
 
     let debuff;
     if ((debuff = this.findDebuff(Debuff.auto_cycle))) {
@@ -186,6 +211,7 @@ export class PlayerController {
         ].sort((a, b) => a.endTime - b.endTime);
         this.update({ debuffs, activeDebuffNames: activeNamesFromDebuffs(debuffs) });
         this.rerender();
+        this.updateScreensaver(false);
         if (debuffs.length > 0) {
           setTimeout(() => this.tick(), debuffs[0].endTime - now);
         }
@@ -226,6 +252,8 @@ export class PlayerController {
     }
 
     const action = this.editor.act(port, key, state, !isMyTurn, this.hasDebuff(Debuff.caps_lock));
+
+    this.updateScreensaver(true);
 
     switch (action) {
       case "edit":

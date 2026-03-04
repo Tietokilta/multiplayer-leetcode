@@ -1,6 +1,28 @@
-import { type RefObject, useEffect, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import type { PlayerController } from "./PlayerController";
+
+function Screensaver({ controller }: { controller: PlayerController }) {
+  const active = controller.usePlayerStore((state) => state.screensaverActive);
+  const delayRef = useRef({ x: 0, y: 0 });
+  const prevActiveRef = useRef<boolean>(null);
+
+  if (prevActiveRef.current !== active) {
+    prevActiveRef.current = active;
+    delayRef.current = {
+      x: -(Math.random() * 7 * 2),
+      y: -(Math.random() * 5.3 * 2),
+    };
+  }
+
+  if (!active) return null;
+  return (
+    <div
+      className="absolute inset-0 z-50 mlc--screensaver"
+      style={{ animationDelay: `${delayRef.current.x}s, ${delayRef.current.y}s` }}
+    />
+  );
+}
 
 type Props = {
   outputRef: RefObject<HTMLPreElement | null>;
@@ -19,6 +41,7 @@ function Game({ outputRef, controller }: Props) {
 
   return (
     <>
+      <Screensaver controller={controller} />
       {puzzle ? (
         <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
           <h2 className="font-bold text-xl">{puzzle.title}</h2>

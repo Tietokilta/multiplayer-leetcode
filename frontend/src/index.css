@@ -82,6 +82,35 @@
   opacity: 0;
 }
 
+.mlc--screensaver {
+  filter: invert(100%); /* The original png is black, and I'm lazy. */
+  background-color: white;
+  background-image: url("/dvd.png");
+  background-repeat: no-repeat;
+  background-size: 20% auto;
+  animation:
+    dvd-x 7s linear infinite alternate,
+    dvd-y 5.3s linear infinite alternate;
+}
+
+@keyframes dvd-x {
+  from {
+    background-position-x: 0%;
+  }
+  to {
+    background-position-x: 100%;
+  }
+}
+
+@keyframes dvd-y {
+  from {
+    background-position-y: 0%;
+  }
+  to {
+    background-position-y: 100%;
+  }
+}
+
 html.debuff-flip_horizontal .mlc--editor {
   scale: -1 1;
 }
