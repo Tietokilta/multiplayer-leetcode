@@ -41,6 +41,8 @@ export class EditorState {
       // cursor_shift: shift cursor left on even rows, right on odd rows
       col += this.row % 2 === 0 ? -1 : 1;
     }
+    const funkyFonts = debuffs.has(Debuff.funky_fonts);
+    const discoMode = debuffs.has(Debuff.disco_mode);
     return this.code.map((line, i) => {
       const isCursorLine = i === this.row;
       const farFromCursor = Math.abs(i - this.row) > 1;
@@ -50,7 +52,12 @@ export class EditorState {
             const isCursorChar = isCursorLine && j === col;
             const farFromCursorChar = !farFromCursor && Math.abs(j - col) > 3;
             return (
-              <span key={j} className={isCursorChar ? "mlc--cursor" : farFromCursorChar ? "mlc--far-char" : ""}>
+              <span
+                key={j}
+                className={isCursorChar ? "mlc--cursor" : farFromCursorChar ? "mlc--far-char" : ""}
+                data-font={funkyFonts ? ((i * 31 + j * 37 + i * j) >>> 0) % 7 : undefined}
+                data-disco={discoMode ? ((i * 53 + j * 29 + i * j * 3) >>> 0) % 10 : undefined}
+              >
                 {char}
               </span>
             );

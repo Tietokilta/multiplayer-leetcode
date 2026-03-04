@@ -115,13 +115,11 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
 
   // Stackable visual debuffs:
   [Debuff.funky_fonts]: {
-    // TODO
     type: "visual1",
     title: "Comic Relief",
     description: "Makes each character appear in a random font.",
   },
   [Debuff.disco_mode]: {
-    // TODO
     type: "visual2",
     title: "Rave Review",
     description: "Adds a random background color to each character.",

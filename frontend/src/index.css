@@ -1,10 +1,53 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Comic Neue";
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/ComicNeue-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Anton";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Anton-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Pirata One";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/PirataOne-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lobster";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Lobster-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Abril Fatface";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/AbrilFatface-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Permanent Marker";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/PermanentMarker-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Boogaloo";
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Boogaloo-Regular.woff2") format("woff2");
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 .mlc--cursor {
-  background-color: white;
-  color: black;
+  background-color: white !important;
+  color: black !important;
 }
 
 /* Debuff queue enter/exit animation */
@@ -84,4 +127,69 @@ html.debuff-fog_of_war .mlc--far-char {
 html.debuff-invisible_cursor .mlc--cursor {
   background-color: unset !important;
   color: unset !important;
+}
+
+html.debuff-funky_fonts [data-font="0"] {
+  font-family: "Comic Neue", cursive;
+}
+html.debuff-funky_fonts [data-font="1"] {
+  font-family: "Anton", sans-serif;
+}
+html.debuff-funky_fonts [data-font="2"] {
+  font-family: "Pirata One", cursive;
+}
+html.debuff-funky_fonts [data-font="3"] {
+  font-family: "Lobster", cursive;
+}
+html.debuff-funky_fonts [data-font="4"] {
+  font-family: "Abril Fatface", serif;
+}
+html.debuff-funky_fonts [data-font="5"] {
+  font-family: "Permanent Marker", cursive;
+}
+html.debuff-funky_fonts [data-font="6"] {
+  font-family: "Boogaloo", sans-serif;
+}
+
+/* disco_mode: backgrounds at oklch L=0.40 (dark), foregrounds at L=0.90 (light),
+   hues evenly spaced 36° apart, foreground is complementary (+180°) */
+html.debuff-disco_mode [data-disco="0"] {
+  background-color: oklch(0.4 0.25 0);
+  color: oklch(0.9 0.2 180);
+}
+html.debuff-disco_mode [data-disco="1"] {
+  background-color: oklch(0.4 0.25 36);
+  color: oklch(0.9 0.2 216);
+}
+html.debuff-disco_mode [data-disco="2"] {
+  background-color: oklch(0.4 0.25 72);
+  color: oklch(0.9 0.2 252);
+}
+html.debuff-disco_mode [data-disco="3"] {
+  background-color: oklch(0.4 0.25 108);
+  color: oklch(0.9 0.2 288);
+}
+html.debuff-disco_mode [data-disco="4"] {
+  background-color: oklch(0.4 0.25 144);
+  color: oklch(0.9 0.2 324);
+}
+html.debuff-disco_mode [data-disco="5"] {
+  background-color: oklch(0.4 0.25 180);
+  color: oklch(0.9 0.2 0);
+}
+html.debuff-disco_mode [data-disco="6"] {
+  background-color: oklch(0.4 0.25 216);
+  color: oklch(0.9 0.2 36);
+}
+html.debuff-disco_mode [data-disco="7"] {
+  background-color: oklch(0.4 0.25 252);
+  color: oklch(0.9 0.2 72);
+}
+html.debuff-disco_mode [data-disco="8"] {
+  background-color: oklch(0.4 0.25 288);
+  color: oklch(0.9 0.2 108);
+}
+html.debuff-disco_mode [data-disco="9"] {
+  background-color: oklch(0.4 0.25 324);
+  color: oklch(0.9 0.2 144);
 }
