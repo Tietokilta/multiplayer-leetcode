@@ -1,25 +1,67 @@
-# Pixiecore Netboot
+# Server & Netboot Setup
 
-This repo is netbooted so all kiosk clients boot the same NixOS image from one source of truth. You update the kiosk once in this repo, and every PXE client gets that version on next boot instead of re-imaging each machine.
+The local server runs three services: the frontend (nginx), the backend game server, and a Pixiecore netboot server that PXE-boots kiosk clients.
 
-## Build and configure the host
-
-1. Edit keys:
-- `nix/configuration.nix`: `users.users.root.openssh.authorizedKeys.keys`
-- `nix/netboot-host.nix`: `users.users.root.openssh.authorizedKeys.keys`
-
-2. Apply host config:
+## Build a bootable server ISO
 
 ```bash
-sudo nixos-rebuild switch --flake ./nix#netboot-host
+./build-server-iso.sh
 ```
 
-3. Verify:
+This builds a NixOS ISO image containing all server services. Write it to a USB stick:
+
+```bash
+sudo dd if=<path-from-script> of=/dev/sdX bs=4M status=progress oflag=sync
+```
+
+## Configure before building
+
+1. Add SSH keys:
+   - `nix/server.nix`: `users.users.root.openssh.authorizedKeys.keys`
+   - `nix/configuration.nix`: `users.users.root.openssh.authorizedKeys.keys` (for kiosk clients)
+
+2. If already running NixOS on the server, apply directly instead of using the ISO:
+
+```bash
+sudo nixos-rebuild switch --flake ./nix#server
+```
+
+## Post-boot setup
+
+1. Create the backend environment file with the admin password:
+
+```bash
+echo 'ADMIN_PASSWORD=your-secret-here' > /var/lib/leetcode-backend/env
+```
+
+2. Pull the Docker image used for code execution:
+
+```bash
+docker pull python:3.14-slim
+```
+
+3. Verify services:
 
 ```bash
 systemctl status pixiecore --no-pager
-journalctl -u pixiecore -b --no-pager
+systemctl status leetcode-backend --no-pager
+systemctl status nginx --no-pager
+systemctl status nfs-server --no-pager
 ```
+
+## NFS
+
+The server exports `/export` via NFS. Kiosk clients mount it at `/mnt/nfs` (auto-mounted on first access). Place any shared files in `/export` on the server.
+
+## Nix build targets
+
+| Target | Description |
+|--------|-------------|
+| `nix build ./nix#server-iso` | Bootable server ISO (frontend + backend + netboot + NFS) |
+| `nix build ./nix#server-vm` | QEMU VM for testing the server |
+| `nix build ./nix#vm` | QEMU VM for testing the kiosk client |
+| `nix build ./nix#netboot-kernel` | Kiosk netboot kernel |
+| `nix build ./nix#netboot-initrd` | Kiosk netboot initrd |
 
 ## Quick test with one Pixiecore command
 

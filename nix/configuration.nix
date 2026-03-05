@@ -7,6 +7,8 @@ in
   system.stateVersion = "25.11";
   time.timeZone = "Europe/Helsinki";
 
+  environment.etc."resolv.conf".text = "nameserver 8.8.8.8\n";
+
   # Firmware and kernel modules for real hardware
   hardware.enableRedistributableFirmware = true;
 
@@ -17,11 +19,13 @@ in
     "virtio_pci" "virtio_blk" "virtio_net"          # VM compat
   ];
 
-  boot.kernelModules = [ "usbhid" "hid_generic" "hid" ];
+  boot.kernelModules = [ "usbhid" "hid_generic" "hid" "nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" ];
+  boot.blacklistedKernelModules = [ "nouveau" ];
 
   networking = {
     hostName = "kiosk";
     networkmanager.enable = true;
+    networkmanager.dns = "none";
     firewall.allowedTCPPorts = [ 22 ];
   };
 
@@ -32,7 +36,7 @@ in
   };
 
   users.users.root.openssh.authorizedKeys.keys = [
-    # Add your SSH public key(s) here before building the ISO
+    "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCiDxF/PZcYfX6N3CQOdQdW0PTPN7tgmwL6RPFDBlJURsxiTlmlRygjMVjrnxbIN9KGIP2p3hUKxensm0ftbl3fvdBG3nUnreGZAUQ7prSrli3tv+WITPFdONtDqcrMlYXbBy51/kFLUQMV7wBYurM/4bW/BOXtNZdk8/dLyCqAr1ynZmXFFHEB3APtlxaLlsyHEER5Nj7WDlxpFUxOqzasPg8MMGKQeN+d2TbUq1s0YDVwmk4F+Zqfj0H9AAYYt4zkiKbCkzTrJXk9snBPAyUot8jkAjZW5nu7quVoiHvWY3335iaa4o2JWDkm6/QEXYzKIbi865jOr3A5DRFytNFQJ7nmXfSNWAJmblSlatlszQLwmTLP5wkV+3zbRHv7WuvWivR76Xy0uyK331UvqrRbNha+EbVoWP5DyFnichBH7B/IgHkLHQJIuYiQBZ2ZwTuVpEoxyCUyl9acDtmUZvuomTAEjLRQElnhRo8iyDf92dl19Q9dG/1RWqLXUEDVBcLrlk89aEnIk7DuwvmVWzWM+On9S8ojH04TgRJM5ZkbQLAIqW5AkLqY6CP5Gzknsh7F4fl5Mq0FZlCOtFzxR+YgIn4IGndonm8/iqDQjJNOWVysFdNRPisPSR5AO5TiuxZSOcCuRkS56cZTHKjdqZS8CxiCfs2ZPlzMnzKJSNDXxQ== cardno:30_079_357"
   ];
 
   # SSH
@@ -40,6 +44,19 @@ in
     enable = true;
     settings.PermitRootLogin = "prohibit-password";
   };
+
+  # --- NVIDIA GPU ---
+  nixpkgs.config.allowUnfree = true;
+  services.xserver.videoDrivers = [ "nvidia" "amdgpu" ];
+  hardware.nvidia = {
+    package = config.boot.kernelPackages.nvidiaPackages.stable;
+    modesetting.enable = true;
+    open = false;
+  };
+  hardware.graphics.enable = true;
+  services.xserver.serverFlagsSection = ''
+    Option "AutoAddGPU" "false"
+  '';
 
   # X11
   services.xserver = {
@@ -58,16 +75,15 @@ in
         ${pkgs.xorg.xset}/bin/xset s off
         ${pkgs.xorg.xset}/bin/xset -dpms
 
-        # Disable all outputs except the first connected one
-        ${pkgs.xorg.xrandr}/bin/xrandr --auto
+        # Force 1920x1080 on the first connected output, disable the rest
+        FIRST_OUTPUT=$(${pkgs.xorg.xrandr}/bin/xrandr --query | ${pkgs.gnugrep}/bin/grep ' connected' | ${pkgs.coreutils}/bin/head -1 | ${pkgs.coreutils}/bin/cut -d' ' -f1)
+        ${pkgs.xorg.xrandr}/bin/xrandr --output "$FIRST_OUTPUT" --mode 1920x1080
         for output in $(${pkgs.xorg.xrandr}/bin/xrandr --query | ${pkgs.gnugrep}/bin/grep ' connected' | ${pkgs.coreutils}/bin/tail -n+2 | ${pkgs.coreutils}/bin/cut -d' ' -f1); do
           ${pkgs.xorg.xrandr}/bin/xrandr --output "$output" --off
         done
 
-        # Get screen resolution for Chromium
-        RESOLUTION=$(${pkgs.xorg.xrandr}/bin/xrandr --query | ${pkgs.gnugrep}/bin/grep -oP '\d+x\d+' | head -1)
-        WIDTH=$(echo $RESOLUTION | ${pkgs.coreutils}/bin/cut -dx -f1)
-        HEIGHT=$(echo $RESOLUTION | ${pkgs.coreutils}/bin/cut -dx -f2)
+        WIDTH=1920
+        HEIGHT=1080
 
         ${pkgs.unclutter}/bin/unclutter -idle 0.5 &
         ${pkgs.chromium}/bin/chromium \
@@ -76,7 +92,7 @@ in
           --start-fullscreen \
           --window-position=0,0 \
           --window-size=$WIDTH,$HEIGHT \
-          https://lajp.fi/ &
+          http://u2.titeen.it.lajp.fi:8080/ &
         waitPID=$!
       '';
     }];
@@ -102,13 +118,13 @@ in
     };
   };
 
-  # NFS mount
+  # NFS mount from the server
   boot.supportedFilesystems = [ "nfs" ];
-  # fileSystems."/mnt/nfs" = {
-  #   device = "server:/export/path";
-  #   fsType = "nfs";
-  #   options = [ "x-systemd.automount" "noauto" ];
-  # };
+  fileSystems."/mnt/nfs" = {
+    device = "u2.titeen.it.lajp.fi:/export";
+    fsType = "nfs";
+    options = [ "x-systemd.automount" "noauto" ];
+  };
 
   # Minimize closure size for netboot
   nix.enable = false;

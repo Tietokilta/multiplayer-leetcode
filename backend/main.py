@@ -671,6 +671,10 @@ class PlayerManager:
                     player.send(result)
                     # Notify spectating admins
                     self.notify_spectators(player.name, result)
+        except Exception as e:
+            log.error(f"Submission failed for player {player.name}: {e}")
+            submission.error = str(e)
+            player.send({"type": "output", "content": f"Internal error: {e}\n"})
         finally:
             # Ensure no ghost states
             if submission.status == "running":
@@ -1361,7 +1365,7 @@ async def main():
         log.info(f"Minigame backend configured at {MINIGAME_BACKEND}:6978")
         minigame_task = asyncio.create_task(player_manager.minigame_ws_task(done))
 
-    server = await serve(lambda ws: ws_handler(ws, player_manager), "localhost", 6979)
+    server = await serve(lambda ws: ws_handler(ws, player_manager), "0.0.0.0", 6979)
 
     async with server:
         await done.wait()

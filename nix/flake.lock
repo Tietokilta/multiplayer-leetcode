@@ -1,5 +1,17 @@
 {
   "nodes": {
+    "backendSrc": {
+      "flake": false,
+      "locked": {
+        "path": "../backend",
+        "type": "path"
+      },
+      "original": {
+        "path": "../backend",
+        "type": "path"
+      },
+      "parent": []
+    },
     "evdevWsSrc": {
       "flake": false,
       "locked": {
@@ -8,6 +20,18 @@
       },
       "original": {
         "path": "../evdev-ws",
+        "type": "path"
+      },
+      "parent": []
+    },
+    "frontendSrc": {
+      "flake": false,
+      "locked": {
+        "path": "../frontend",
+        "type": "path"
+      },
+      "original": {
+        "path": "../frontend",
         "type": "path"
       },
       "parent": []
@@ -30,7 +54,9 @@
     },
     "root": {
       "inputs": {
+        "backendSrc": "backendSrc",
         "evdevWsSrc": "evdevWsSrc",
+        "frontendSrc": "frontendSrc",
         "nixpkgs": "nixpkgs"
       }
     }
