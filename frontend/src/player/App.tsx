@@ -189,7 +189,7 @@ function App() {
     <div className="flex flex-col p-4 gap-4 h-screen">
       {connState}
       {localKeyboard}
-      {debuffTestMode && <DebuffSelector controller={controller} />}
+      {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
       {showKeyboards && <KeyboardList controller={controller} />}
       <Game outputRef={outputRef} controller={controller} />
       <DebuffQueue controller={controller} />

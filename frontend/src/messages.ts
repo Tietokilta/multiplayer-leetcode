@@ -3,7 +3,15 @@ import type { Debuff } from "./debuffs";
 export type PlayerCmd =
   | { type: "login"; id: string }
   | { type: "edit"; code?: string; row: number; col: number }
-  | { type: "submit" };
+  | { type: "submit" }
+  | {
+      type: "administer_debuff";
+      players: string[];
+      name: string;
+      debuff_type: string;
+      strength: number;
+      duration: number;
+    };
 
 export type DebuffItem = {
   name: Debuff;

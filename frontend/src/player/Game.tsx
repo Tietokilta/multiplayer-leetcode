@@ -1,6 +1,6 @@
 import { type RefObject, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
-import { Debuff } from "../debuffs";
+import { clippyDebuffs, Debuff } from "../debuffs";
 import type { PlayerController } from "./PlayerController";
 import { Clippy } from "./Clippy";
 
@@ -46,12 +46,13 @@ function LightsOut({ controller }: { controller: PlayerController }) {
 
 function ClippyController({ controller }: { controller: PlayerController }) {
   const debuff = controller.usePlayerStore((state) =>
-    state.activeDebuffNames.has(Debuff.clippy_attack)
-      ? state.debuffs.find((d) => d.name === Debuff.clippy_attack)
+    clippyDebuffs.some((d) => state.activeDebuffNames.has(d))
+      ? state.debuffs.find((d) => clippyDebuffs.includes(d.name))
       : undefined,
   );
+  const done = controller.usePlayerStore((state) => state.clippyEdited);
   if (!debuff) return null;
-  return <Clippy duration={debuff.duration} />;
+  return <Clippy key={debuff.endTime} debuff={debuff} done={done} />;
 }
 
 function Game({ outputRef, controller }: Props) {

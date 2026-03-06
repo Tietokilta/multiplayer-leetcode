@@ -47,7 +47,7 @@ export class EditorState {
       const isCursorLine = i === this.row;
       const farFromCursor = Math.abs(i - this.row) > 1;
       return (
-        <div key={i} className={`whitespace-pre font-mono mlc--line ${farFromCursor ? "mlc--far" : ""}`}>
+        <div key={i} className={`whitespace-pre-wrap font-mono mlc--line ${farFromCursor ? "mlc--far" : ""}`}>
           {line.map((char, j) => {
             const isCursorChar = isCursorLine && j === col;
             const farFromCursorChar = !farFromCursor && Math.abs(j - col) > 3;

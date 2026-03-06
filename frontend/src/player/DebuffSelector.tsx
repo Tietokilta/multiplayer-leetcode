@@ -11,7 +11,7 @@ function initialStrength(name: Debuff): number {
   return max ? Math.ceil(max / 2) : 1;
 }
 
-export function DebuffSelector({ controller }: { controller: PlayerController }) {
+export function DebuffSelector({ controller, myId }: { controller: PlayerController; myId: string }) {
   const [selectedName, setSelectedName] = useState<Debuff>(debuffNames[0]);
   const [duration, setDuration] = useState(30);
   const [strength, setStrength] = useState(() => initialStrength(debuffNames[0]));
@@ -25,9 +25,13 @@ export function DebuffSelector({ controller }: { controller: PlayerController })
   }
 
   function administer() {
-    controller.handleMessage({
-      type: "debuffs",
-      debuffs: [{ name: selectedName, type: info.type, strength, duration }],
+    controller.server.send({
+      type: "administer_debuff",
+      players: [myId],
+      name: selectedName,
+      debuff_type: info.type,
+      strength,
+      duration,
     });
   }
 

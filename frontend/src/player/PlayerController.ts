@@ -1,7 +1,7 @@
 import { createRef, type ReactNode } from "react";
 import { create } from "zustand";
 import { GameServerHandler, type ConnState } from "../connection";
-import { Debuff } from "../debuffs";
+import { clippyDebuffs, Debuff } from "../debuffs";
 import { keyToRow, nextKeyRight, reverseNavigationKeys } from "../keyboards";
 import type {
   KeyboardServerMessage,
@@ -52,6 +52,7 @@ export type PlayerState = {
 
   debuffs: ActiveDebuff[];
   activeDebuffNames: Set<Debuff>;
+  clippyEdited: boolean;
 
   screensaverActive: boolean;
   screensaverTimeout: number | null;
@@ -94,6 +95,7 @@ export class PlayerController {
 
     debuffs: [],
     activeDebuffNames: new Set(),
+    clippyEdited: false,
 
     screensaverActive: false,
     screensaverTimeout: null,
@@ -174,6 +176,9 @@ export class PlayerController {
     switch (data.type) {
       case "editor":
         this.editor.load(data);
+        if (clippyDebuffs.some((d) => this.hasDebuff(d))) {
+          this.update({ clippyEdited: true });
+        }
         this.rerender();
         break;
       case "puzzle":
@@ -200,7 +205,7 @@ export class PlayerController {
           break;
         }
         const now = Date.now();
-        const { debuffs: existing } = this.usePlayerStore.getState();
+        const { debuffs: existing, clippyEdited } = this.usePlayerStore.getState();
         const debuffs = [
           ...existing,
           ...data.debuffs.map((d) => ({
@@ -211,7 +216,13 @@ export class PlayerController {
             endTime: now + d.duration * 1000,
           })),
         ].sort((a, b) => a.endTime - b.endTime);
-        this.update({ debuffs, activeDebuffNames: activeNamesFromDebuffs(debuffs) });
+        const clippyAdded = data.debuffs.some((d) => clippyDebuffs.includes(d.name));
+        this.update({
+          debuffs,
+          activeDebuffNames: activeNamesFromDebuffs(debuffs),
+          // Set clippyEdited = false when Clippy debuff is added
+          clippyEdited: clippyEdited && !clippyAdded,
+        });
         this.rerender();
         this.updateScreensaver(false);
         if (debuffs.length > 0) {
@@ -236,6 +247,10 @@ export class PlayerController {
     state: KeyState,
     handledDebuffs: Partial<Record<Debuff, boolean>> = {},
   ): void {
+    // Disable input if Clippy debuff is active
+    if (clippyDebuffs.some((d) => this.hasDebuff(d)) && !this.usePlayerStore.getState().clippyEdited) {
+      return;
+    }
     // Delay input if input_lag debuff is active
     let debuff;
     if (!handledDebuffs.input_lag && (debuff = this.findDebuff(Debuff.input_lag))) {

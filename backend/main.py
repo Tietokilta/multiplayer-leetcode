@@ -12,12 +12,14 @@ from typing import AsyncGenerator, Literal, Never, NotRequired, TypedDict, cast
 
 import aiosqlite
 from inotify_simple import Event as InotifyEvent, INotify, flags
+from openrouter import OpenRouter
 from websockets import ServerConnection, WebSocketException, serve
 from yaml import safe_load
 
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
 SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
 
 
@@ -178,6 +180,44 @@ class SpectateDebuffMessage(TypedDict):
 
 
 type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage
+
+
+LLM_MODEL = "openai/gpt-5.3-codex"
+
+DEBUFF_SYSTEM_PROMPTS = {
+    "clippy_attack": """You are a study assistant, helping the user learn to read and debug programs.
+
+The user will give you a Python program and the associated task. \
+Your task is to change one line in the code to introduce three bug for the user to debug.
+
+Bugs inserted should be plainly obvious, funny, and creative to support learning.
+
+IMPORTANT: Output only the code.
+IMPORTANT: Do NOT make changes to the code other than inserting bugs.
+IMPORTANT: Do not disclose what the bugs are in the output.
+
+The user's code may be incomplete; in that case, attempt to determine what the user is planning. \
+If there isn't enough room for three bugs, you must instead complete the code in an obviously incorrect way.""",
+    "clippy_comments": """You are a study assistant, helping the user learn to read and debug programs.
+
+The user will give you a Python program and the associated task. \
+Your task is to add obviously incorrect comments to teach the user about comparing comments to code.
+
+Comments inserted should be plainly obvious, funny, and creative to support learning.
+
+IMPORTANT: Output only the code.
+IMPORTANT: Do NOT make changes to the code other than inserting comments.
+
+If there isn't enough code to comment, instead add obviously incorrect TODOs.""",
+}
+
+DEBUFF_USER_TEMPLATE = """### Task
+{task}
+
+### User Code
+```
+{code}
+```"""
 
 
 async def run_code(
@@ -504,15 +544,7 @@ class PlayerManager:
             if reset_editors:
                 player.send(player.editor_json())
                 # Notify spectating admins of the reset
-                self.notify_spectators(
-                    player.name,
-                    {
-                        "type": "edit",
-                        "code": player.code,
-                        "row": player.row,
-                        "col": player.col,
-                    },
-                )
+                self.notify_spectators(player.name, player.editor_json())
                 if existing_submission:
                     player.send({"type": "state", "state": existing_submission.status})
                     player.send({"type": "output", "content": existing_submission.output})
@@ -633,7 +665,7 @@ class PlayerManager:
             except Exception:
                 pass  # Ignore send errors
 
-    def notify_spectators(self, player_name: str, message: CodeRunOutput | CodeRunState | EditCmd | DebuffMessage):
+    def notify_spectators(self, player_name: str, message: CodeRunOutput | CodeRunState | PlayerJson | DebuffMessage):
         """Sends a message to all admins spectating a specific player."""
 
         converted: WsMessage
@@ -649,7 +681,7 @@ class PlayerManager:
                 "type": "spectate_state",
                 "player": player_name,
             }
-        elif message["type"] == "edit":
+        elif message["type"] == "editor":
             converted = {
                 **message,
                 "type": "spectate_editor",
@@ -723,6 +755,59 @@ class PlayerManager:
         log.info(f"Removed player: {name}")
         return None
 
+    async def _apply_llm_debuff(self, player: Player, system_prompt: str, code: str, duration: float) -> None:
+        """Calls OpenRouter to transform the player's code, then replaces their editor state with the result."""
+        if not OPENROUTER_KEY or not self.current_puzzle:
+            return
+        task_desc = self.current_puzzle.description
+        user_content = DEBUFF_USER_TEMPLATE.format(task=task_desc, code=code)
+        start_at = time.monotonic()
+        # Entry is ~3.5s, exit is ~4s, aim for the result to be returned around 2/3 of the way through the "active" part
+        min_done_at = start_at + 3.5 + max(duration - 7.5, 0) * 0.67
+        log.info(f"LLM debuff call starting for player {player.name} (model={LLM_MODEL})")
+        log.debug(f"LLM debuff system prompt: {system_prompt}")
+        log.debug(f"LLM debuff user content: {user_content}")
+        try:
+            async with OpenRouter(api_key=OPENROUTER_KEY) as client:
+                res = await client.chat.send_async(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
+                    ],
+                    model=LLM_MODEL,
+                    stream=False,
+                )
+            new_code = res.choices[0].message.content
+            if not isinstance(new_code, str):
+                log.warning(f"LLM debuff call returned empty content for player {player.name}")
+                return
+            duration = time.monotonic() - start_at
+            log.info(f"LLM debuff call succeeded for player {player.name} ({len(new_code)} chars, {duration:.2f}s)")
+            log.debug(f"LLM debuff result: {new_code}")
+            # Strip triple-backtick fences and surrounding whitespace
+            new_code = (
+                new_code.strip()
+                .removeprefix("```python")
+                .removeprefix("```py")
+                .removeprefix("```")
+                .removesuffix("```")
+                .strip()
+            )
+        except Exception:
+            log.exception(f"LLM debuff call failed for player {player.name}")
+            return
+        # Wait until at least half the debuff duration has elapsed
+        remaining = min_done_at - time.monotonic()
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+        # Apply the new code (same as puzzle reset)
+        player.code = new_code
+        player.col = 0
+        player.row = 0
+        self.unsaved.add(player.name)
+        player.send(player.editor_json())
+        self.notify_spectators(player.name, player.editor_json())
+
     def administer_debuff(self, cmd: AdminDebuffCmd) -> ActionError | None:
         """Administers a debuff to the listed players. Duration stacks with existing same-type debuffs."""
         now = time.monotonic()
@@ -732,6 +817,9 @@ class PlayerManager:
             if not player:
                 continue
             found_any = True
+            log.info(
+                f"Administering debuff {cmd['name']!r} to player {player_name} (duration={cmd['duration']}s, strength={cmd['strength']})"
+            )
             # Remove expired debuffs
             player.debuffs = [d for d in player.debuffs if d.start + d.duration > now]
             # Find longest remaining duration of same-type debuffs to stack with
@@ -761,6 +849,9 @@ class PlayerManager:
             }
             player.send(msg)
             self.notify_spectators(player_name, msg)
+            # If this debuff type has an LLM prompt, launch the code-transform task
+            if system_prompt := DEBUFF_SYSTEM_PROMPTS.get(cmd["name"]):
+                asyncio.create_task(self._apply_llm_debuff(player, system_prompt, player.code, duration))
         if not found_any:
             return {"type": "error", "message": "No such player"}
         return None
@@ -857,11 +948,14 @@ async def ws_handler(
                         player.col = msg["col"]
                         manager.unsaved.add(player.name)
                         # Notify spectating admins
-                        manager.notify_spectators(player.name, msg)
+                        manager.notify_spectators(player.name, player.editor_json())
                     elif msg["type"] == "submit":
                         log.info(f"Player {player.name} submitting code")
                         if error := manager.submit(player):
                             log.info(f"Submission error for player {player.name}: {error['message']}")
+                            await send(ws, error)
+                    elif msg["type"] == "administer_debuff" and environ.get("DEBUG"):
+                        if error := manager.administer_debuff(msg):
                             await send(ws, error)
                     else:
                         log.warning(f"Unknown action from player {player.name}: {msg['type']}")
@@ -1034,5 +1128,8 @@ if __name__ == "__main__":
     basicConfig(level=INFO, format="%(asctime)s %(levelname)s %(message)s")
     if environ.get("DEBUG"):
         log.setLevel(DEBUG)
+
+    if not OPENROUTER_KEY:
+        log.warning("OPENROUTER_KEY environment variable not set")
 
     asyncio.run(main())

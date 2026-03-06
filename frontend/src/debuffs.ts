@@ -33,6 +33,8 @@ export enum Debuff {
   variable_shuffle = "variable_shuffle",
 }
 
+export const clippyDebuffs = [Debuff.clippy_attack, Debuff.clippy_comments];
+
 export type DebuffInfo = {
   type: string;
   title: string;
