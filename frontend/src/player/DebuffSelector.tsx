@@ -4,6 +4,11 @@ import { PlayerController } from "./PlayerController";
 
 const debuffNames = Object.keys(debuffInfo) as Debuff[];
 
+function initialDuration(name: Debuff): number {
+  const def = debuffInfo[name].defaultDuration;
+  return def ?? 30;
+}
+
 function initialStrength(name: Debuff): number {
   const def = debuffInfo[name].defaultStrength;
   if (def) return def;
@@ -13,7 +18,7 @@ function initialStrength(name: Debuff): number {
 
 export function DebuffSelector({ controller, myId }: { controller: PlayerController; myId: string }) {
   const [selectedName, setSelectedName] = useState<Debuff>(debuffNames[0]);
-  const [duration, setDuration] = useState(30);
+  const [duration, setDuration] = useState(() => initialDuration(debuffNames[0]));
   const [strength, setStrength] = useState(() => initialStrength(debuffNames[0]));
 
   const info = debuffInfo[selectedName];
@@ -21,6 +26,7 @@ export function DebuffSelector({ controller, myId }: { controller: PlayerControl
 
   function handleNameChange(name: Debuff) {
     setSelectedName(name);
+    setDuration(initialDuration(name));
     setStrength(initialStrength(name));
   }
 

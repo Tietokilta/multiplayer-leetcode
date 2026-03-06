@@ -4,6 +4,7 @@ import { GameServerHandler, type ConnState } from "../connection";
 import { clippyDebuffs, Debuff } from "../debuffs";
 import { keyToRow, nextKeyRight, reverseNavigationKeys } from "../keyboards";
 import type {
+  DebuffItem,
   KeyboardServerMessage,
   KeyState,
   PlayerCmd,
@@ -23,18 +24,6 @@ export type ActiveDebuff = {
   duration: number;
   endTime: number; // Date.now() + duration * 1000
 };
-
-function activeNamesFromDebuffs(debuffs: ActiveDebuff[]): Set<Debuff> {
-  const seen = new Set<string>();
-  const names = new Set<Debuff>();
-  for (const d of debuffs) {
-    if (!seen.has(d.type)) {
-      seen.add(d.type);
-      names.add(d.name);
-    }
-  }
-  return names;
-}
 
 export type PlayerState = {
   connected: ConnState;
@@ -70,6 +59,15 @@ const example = `function twoSum(nums: number[], target: number): number[] {
   }
   return [];
 }`;
+
+function filterActive(debuffs: ActiveDebuff[]) {
+  const seen = new Set<string>();
+  return debuffs.filter((d) => {
+    if (seen.has(d.name)) return false;
+    seen.add(d.name);
+    return true;
+  });
+}
 
 export class PlayerController {
   server = new GameServerHandler<PlayerCmd, PlayerMessage>();
@@ -152,9 +150,7 @@ export class PlayerController {
 
   tick() {
     const now = Date.now();
-    const { debuffs } = this.usePlayerStore.getState();
-    const remaining = debuffs.filter((d) => d.endTime > now);
-    this.update({ debuffs: remaining, activeDebuffNames: activeNamesFromDebuffs(remaining) });
+    const remaining = this.updateDebuffs([]);
     if (remaining.length > 0) {
       setTimeout(() => this.tick(), remaining[0].endTime - now);
     }
@@ -172,6 +168,48 @@ export class PlayerController {
         });
       }
     }
+  }
+
+  private updateDebuffs(newDebuffs: DebuffItem[] | false) {
+    const now = Date.now();
+    const { debuffs: debuffsBefore } = this.usePlayerStore.getState();
+    const activeBefore = filterActive(debuffsBefore);
+
+    const debuffsAfter =
+      newDebuffs === false
+        ? []
+        : [
+            ...debuffsBefore.filter((d) => d.endTime > now),
+            ...newDebuffs.map((d) => ({
+              name: d.name,
+              type: d.type,
+              strength: d.strength,
+              duration: d.duration * 1000,
+              endTime: now + d.duration * 1000,
+            })),
+          ].sort((a, b) => a.endTime - b.endTime);
+    const activeAfter = filterActive(debuffsAfter);
+
+    for (const ended of activeBefore) {
+      if (!activeAfter.includes(ended)) {
+        console.log("Debuff ended:", ended.name);
+      }
+    }
+    for (const started of activeAfter) {
+      if (!activeBefore.includes(started)) {
+        console.log("Debuff started:", started.name);
+        if (clippyDebuffs.includes(started.name)) {
+          this.update({ clippyEdited: false, clippyBlocked: 0 });
+        }
+        if (started.name === Debuff.keyboard_cat) {
+          // Allow some time for the video to start, then start injecting random keys
+          setTimeout(() => this.injectRandomKey(), 1500);
+        }
+      }
+    }
+
+    this.update({ debuffs: debuffsAfter, activeDebuffNames: new Set(activeAfter.map((d) => d.name)) });
+    return debuffsAfter;
   }
 
   handleMessage(data: PlayerMessage) {
@@ -202,35 +240,17 @@ export class PlayerController {
         break;
       case "debuffs": {
         if (data.debuffs.length === 0) {
+          this.updateDebuffs([]);
           this.update({ debuffs: [], activeDebuffNames: new Set() });
           this.rerender();
           break;
         }
         const now = Date.now();
-        const { debuffs: existing, clippyEdited, clippyBlocked } = this.usePlayerStore.getState();
-        const debuffs = [
-          ...existing,
-          ...data.debuffs.map((d) => ({
-            name: d.name,
-            type: d.type,
-            strength: d.strength,
-            duration: d.duration * 1000,
-            endTime: now + d.duration * 1000,
-          })),
-        ].sort((a, b) => a.endTime - b.endTime);
-        const clippyAdded = data.debuffs.some((d) => clippyDebuffs.includes(d.name));
-        this.update({
-          debuffs,
-          activeDebuffNames: activeNamesFromDebuffs(debuffs),
-          // Set clippyEdited = false when Clippy debuff is added
-          clippyEdited: clippyEdited && !clippyAdded,
-          // Unset clippyBlocked when there are no Clippy debuffs active
-          clippyBlocked: !debuffs.some((d) => clippyDebuffs.includes(d.name)) ? 0 : clippyBlocked,
-        });
+        const newDebuffs = this.updateDebuffs(data.debuffs);
         this.rerender();
         this.updateScreensaver(false);
-        if (debuffs.length > 0) {
-          setTimeout(() => this.tick(), debuffs[0].endTime - now);
+        if (newDebuffs.length > 0) {
+          setTimeout(() => this.tick(), newDebuffs[0].endTime - now);
         }
         break;
       }
@@ -319,6 +339,24 @@ export class PlayerController {
           });
         }
         break;
+    }
+  }
+
+  private injectRandomKey() {
+    const action = this.editor.act("local", "A", "down", true);
+    if (action === "edit" || action === "navigate") {
+      this.rerender();
+      this.server.send({
+        type: "edit",
+        code: this.editor.getCode(),
+        row: this.editor.row,
+        col: this.editor.col,
+      });
+    }
+    let debuff;
+    if ((debuff = this.findDebuff(Debuff.keyboard_cat))) {
+      const intervalMs = (debuff.duration - 1500) / debuff.strength;
+      setTimeout(() => this.injectRandomKey(), intervalMs);
     }
   }
 

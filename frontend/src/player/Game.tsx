@@ -4,6 +4,39 @@ import { clippyDebuffs, Debuff } from "../debuffs";
 import type { PlayerController } from "./PlayerController";
 import { Clippy } from "./Clippy";
 
+function CatVideo({ controller }: { controller: PlayerController }) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const active = controller.usePlayerStore((state) => state.activeDebuffNames.has(Debuff.keyboard_cat));
+
+  useEffect(() => {
+    if (!active) return;
+    const win = iframeRef.current?.contentWindow;
+    const restart = () => {
+      win?.postMessage(JSON.stringify({ event: "command", func: "unMute", args: [] }), "*");
+      win?.postMessage(JSON.stringify({ event: "command", func: "seekTo", args: [0, true] }), "*");
+      win?.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: [] }), "*");
+    };
+    restart();
+    const interval = setInterval(restart, 15000);
+    return () => {
+      win?.postMessage(JSON.stringify({ event: "command", func: "stopVideo", args: [] }), "*");
+      win?.postMessage(JSON.stringify({ event: "command", func: "mute", args: [] }), "*");
+      clearInterval(interval);
+    };
+  }, [active]);
+
+  return (
+    <div className="fixed bottom-20 right-0 z-50 w-[50vw]" style={{ visibility: active ? "visible" : "hidden" }}>
+      <iframe
+        ref={iframeRef}
+        src="https://www.youtube.com/embed/lEtLb86O7NQ?mute=1&enablejsapi=1&controls=0"
+        allow="autoplay; encrypted-media"
+        className="w-full aspect-video border-none block pointer-events-none"
+      />
+    </div>
+  );
+}
+
 function Screensaver({ controller }: { controller: PlayerController }) {
   const active = controller.usePlayerStore((state) => state.screensaverActive);
   const delayRef = useRef({ x: 0, y: 0 });
@@ -69,6 +102,7 @@ function Game({ outputRef, controller }: Props) {
 
   return (
     <>
+      <CatVideo controller={controller} />
       <Screensaver controller={controller} />
       <LightsOut controller={controller} />
       <ClippyController controller={controller} />

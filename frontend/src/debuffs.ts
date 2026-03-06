@@ -25,7 +25,7 @@ export enum Debuff {
   flip_vertical = "flip_vertical",
   nausea = "nausea",
   hyperfocus = "hyperfocus",
-  mess_up = "mess_up",
+  keyboard_cat = "keyboard_cat",
   clippy_attack = "clippy_attack",
   clippy_comments = "clippy_comments",
   angry_bird = "angry_bird",
@@ -41,6 +41,7 @@ export type DebuffInfo = {
   description: string;
   maxStrength?: number;
   defaultStrength?: number;
+  defaultDuration?: number;
 };
 
 export const debuffInfo: Record<Debuff, DebuffInfo> = {
@@ -205,25 +206,25 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
   },
 
   // One-off debuffs:
-  [Debuff.mess_up]: {
-    // TODO
+  [Debuff.keyboard_cat]: {
     type: "one_off",
     title: "Keyboard Cat",
     description: "Inserts random characters when received.",
     maxStrength: 100, // chars
-    defaultStrength: 20,
+    defaultStrength: 25,
+    defaultDuration: 20,
   },
   [Debuff.clippy_attack]: {
-    // TODO
     type: "one_off",
     title: "It Looks Like You're Struggling",
     description: "Makes Clippy appear and mess with the user's code.",
+    defaultDuration: 25,
   },
   [Debuff.clippy_comments]: {
-    // TODO
     type: "one_off",
     title: "Unsolicited Advice",
     description: 'Adds "helpful" LLM comments after each line.',
+    defaultDuration: 25,
   },
   [Debuff.angry_bird]: {
     // TODO
