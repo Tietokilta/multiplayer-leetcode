@@ -20,6 +20,7 @@ export type ActiveDebuff = {
   name: Debuff;
   type: string;
   strength: number;
+  duration: number;
   endTime: number; // Date.now() + duration * 1000
 };
 
@@ -206,6 +207,7 @@ export class PlayerController {
             name: d.name,
             type: d.type,
             strength: d.strength,
+            duration: d.duration * 1000,
             endTime: now + d.duration * 1000,
           })),
         ].sort((a, b) => a.endTime - b.endTime);

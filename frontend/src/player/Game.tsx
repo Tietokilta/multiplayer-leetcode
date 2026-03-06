@@ -2,6 +2,7 @@ import { type RefObject, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Debuff } from "../debuffs";
 import type { PlayerController } from "./PlayerController";
+import { Clippy } from "./Clippy";
 
 function Screensaver({ controller }: { controller: PlayerController }) {
   const active = controller.usePlayerStore((state) => state.screensaverActive);
@@ -43,6 +44,16 @@ function LightsOut({ controller }: { controller: PlayerController }) {
   );
 }
 
+function ClippyController({ controller }: { controller: PlayerController }) {
+  const debuff = controller.usePlayerStore((state) =>
+    state.activeDebuffNames.has(Debuff.clippy_attack)
+      ? state.debuffs.find((d) => d.name === Debuff.clippy_attack)
+      : undefined,
+  );
+  if (!debuff) return null;
+  return <Clippy duration={debuff.duration} />;
+}
+
 function Game({ outputRef, controller }: Props) {
   const { puzzle, output, submissionState, submissionError, rendered } = controller.usePlayerStore();
   const [isOutputScrolling, setIsOutputScrolling] = useState(false);
@@ -57,6 +68,7 @@ function Game({ outputRef, controller }: Props) {
     <>
       <Screensaver controller={controller} />
       <LightsOut controller={controller} />
+      <ClippyController controller={controller} />
       {puzzle ? (
         <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
           <h2 className="font-bold text-xl">{puzzle.title}</h2>

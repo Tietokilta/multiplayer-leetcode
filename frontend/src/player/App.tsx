@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useInterval, useLocalStorage } from "usehooks-ts";
 import { stateColors } from "../connection";
+import { useClippyPreload } from "./clippyData";
 import { DebuffQueue } from "./DebuffQueue";
 import { DebuffSelector } from "./DebuffSelector";
 import { RenderedEditor } from "./Editor";
@@ -83,6 +84,8 @@ function App() {
       controller.keyboardServer.disconnect();
     };
   }, [controller]);
+
+  useClippyPreload();
 
   const connState = (
     <div className="absolute top-6 right-6 flex items-center">
