@@ -96,7 +96,7 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
               <p>All right, just a moment!</p>
             ) : (
               <>
-                <p>It looks like you're writing code!</p>
+                <p>It looks like you're struggling with the algorithm!</p>
                 <p>Would you like help?</p>
                 <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
                   <li className="pl-1">Get help with the algorithm</li>

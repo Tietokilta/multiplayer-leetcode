@@ -53,6 +53,7 @@ export type PlayerState = {
   debuffs: ActiveDebuff[];
   activeDebuffNames: Set<Debuff>;
   clippyEdited: boolean;
+  clippyBlocked: number;
 
   screensaverActive: boolean;
   screensaverTimeout: number | null;
@@ -96,6 +97,7 @@ export class PlayerController {
     debuffs: [],
     activeDebuffNames: new Set(),
     clippyEdited: false,
+    clippyBlocked: 0,
 
     screensaverActive: false,
     screensaverTimeout: null,
@@ -205,7 +207,7 @@ export class PlayerController {
           break;
         }
         const now = Date.now();
-        const { debuffs: existing, clippyEdited } = this.usePlayerStore.getState();
+        const { debuffs: existing, clippyEdited, clippyBlocked } = this.usePlayerStore.getState();
         const debuffs = [
           ...existing,
           ...data.debuffs.map((d) => ({
@@ -222,6 +224,8 @@ export class PlayerController {
           activeDebuffNames: activeNamesFromDebuffs(debuffs),
           // Set clippyEdited = false when Clippy debuff is added
           clippyEdited: clippyEdited && !clippyAdded,
+          // Unset clippyBlocked when there are no Clippy debuffs active
+          clippyBlocked: !debuffs.some((d) => clippyDebuffs.includes(d.name)) ? 0 : clippyBlocked,
         });
         this.rerender();
         this.updateScreensaver(false);
@@ -249,6 +253,7 @@ export class PlayerController {
   ): void {
     // Disable input if Clippy debuff is active
     if (clippyDebuffs.some((d) => this.hasDebuff(d)) && !this.usePlayerStore.getState().clippyEdited) {
+      this.update({ clippyBlocked: Date.now() });
       return;
     }
     // Delay input if input_lag debuff is active

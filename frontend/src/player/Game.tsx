@@ -56,7 +56,9 @@ function ClippyController({ controller }: { controller: PlayerController }) {
 }
 
 function Game({ outputRef, controller }: Props) {
-  const { puzzle, output, submissionState, submissionError, rendered } = controller.usePlayerStore();
+  const { puzzle, output, submissionState, submissionError, rendered, clippyBlocked, activeDebuffNames } =
+    controller.usePlayerStore();
+  const clippyActive = clippyDebuffs.some((d) => activeDebuffNames.has(d));
   const [isOutputScrolling, setIsOutputScrolling] = useState(false);
 
   useEffect(() => {
@@ -84,11 +86,16 @@ function Game({ outputRef, controller }: Props) {
           {rendered}
         </div>
         <div className="border rounded p-4 flex flex-col gap-2 min-h-0 debuff-nausea mlc--output">
-          {(submissionState === null || submissionState === "invalid") && (
-            <div className="text-blue-500 font-bold animate-[pulse_ease_2s_infinite]">
-              Press Ctrl+Enter to submit{isOutputScrolling && ", Ctrl+Up/Down to scroll output"}
-            </div>
-          )}
+          {(submissionState === null || submissionState === "invalid") &&
+            (clippyActive && clippyBlocked > 0 ? (
+              <div key={clippyBlocked} className="text-red-500 font-bold animate-[fadeout_1s_linear_1_forwards]">
+                Clippy is helping you, please wait!
+              </div>
+            ) : (
+              <div className="text-blue-500 font-bold animate-[pulse_ease_2s_infinite]">
+                Press Ctrl+Enter to submit{isOutputScrolling && ", Ctrl+Up/Down to scroll output"}
+              </div>
+            ))}
           {submissionState === "running" && (
             <div className="text-blue-500 font-bold animate-[pulse_ease_1s_infinite]">Submission running...</div>
           )}

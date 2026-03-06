@@ -292,3 +292,12 @@ html.debuff-disco_mode [data-disco="9"] {
   background-color: oklch(0.4 0.25 324);
   color: oklch(0.9 0.2 144);
 }
+
+@keyframes fadeout {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
