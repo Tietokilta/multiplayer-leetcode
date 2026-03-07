@@ -4,9 +4,25 @@ import { clippyDebuffs, Debuff } from "../debuffs";
 import type { PlayerController } from "./PlayerController";
 import { Clippy } from "./Clippy";
 
-function CatVideo({ controller }: { controller: PlayerController }) {
+function YoutubeEmbed({
+  controller,
+  videoId,
+  debuff,
+  className,
+  activeClass,
+  inactiveClass,
+  duration,
+}: {
+  controller: PlayerController;
+  videoId: string;
+  debuff: Debuff;
+  className?: string;
+  activeClass?: string;
+  inactiveClass?: string;
+  duration?: number;
+}) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const active = controller.usePlayerStore((state) => state.activeDebuffNames.has(Debuff.keyboard_cat));
+  const active = controller.usePlayerStore((state) => state.activeDebuffNames.has(debuff));
 
   useEffect(() => {
     if (!active) return;
@@ -17,24 +33,46 @@ function CatVideo({ controller }: { controller: PlayerController }) {
       win?.postMessage(JSON.stringify({ event: "command", func: "playVideo", args: [] }), "*");
     };
     restart();
-    const interval = setInterval(restart, 15000);
+    const interval = setInterval(restart, duration);
     return () => {
       win?.postMessage(JSON.stringify({ event: "command", func: "stopVideo", args: [] }), "*");
       win?.postMessage(JSON.stringify({ event: "command", func: "mute", args: [] }), "*");
       clearInterval(interval);
     };
-  }, [active]);
+  }, [active, duration]);
 
   return (
-    <div className="fixed bottom-20 right-0 z-50 w-[50vw]" style={{ visibility: active ? "visible" : "hidden" }}>
-      <iframe
-        ref={iframeRef}
-        src="https://www.youtube.com/embed/lEtLb86O7NQ?mute=1&enablejsapi=1&controls=0"
-        allow="autoplay; encrypted-media"
-        className="w-full aspect-video border-none block pointer-events-none"
-      />
-    </div>
+    <iframe
+      ref={iframeRef}
+      src={`https://www.youtube.com/embed/${videoId}?${active ? "autoplay=1&mute=0" : "autoplay=0&mute=1"}&enablejsapi=1&controls=0`}
+      allow="autoplay; encrypted-media"
+      className={`${className} ${active ? activeClass : inactiveClass} border-none block pointer-events-none`}
+    />
   );
+}
+
+export function SubwaySurfers({ controller }: { controller: PlayerController }) {
+  return YoutubeEmbed({
+    controller,
+    videoId: "QPW3XwBoQlw",
+    debuff: Debuff.subway_surfers,
+    className: "transition-[width] ease-in-out duration-500",
+    activeClass: "w-[56.25vh]",
+    inactiveClass: "w-0",
+    duration: 150000,
+  });
+}
+
+function CatVideo({ controller }: { controller: PlayerController }) {
+  return YoutubeEmbed({
+    controller,
+    videoId: "lEtLb86O7NQ",
+    debuff: Debuff.keyboard_cat,
+    className: "fixed bottom-20 right-0 z-31 w-[50vw] aspect-video",
+    activeClass: "visible",
+    inactiveClass: "invisible",
+    duration: 15000,
+  });
 }
 
 function Screensaver({ controller }: { controller: PlayerController }) {
@@ -73,7 +111,7 @@ function LightsOut({ controller }: { controller: PlayerController }) {
   if (!debuff) return null;
   const radius = Math.round(500 / debuff.strength);
   return (
-    <div className="absolute inset-0 z-50 mlc--lights-out" style={{ "--sl-r": `${radius}vw` } as React.CSSProperties} />
+    <div className="absolute inset-0 z-48 mlc--lights-out" style={{ "--sl-r": `${radius}vw` } as React.CSSProperties} />
   );
 }
 

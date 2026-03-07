@@ -87,7 +87,7 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
   }, [schedule]);
 
   return (
-    <div className="absolute bottom-20 right-20 z-50 flex flex-col items-end pointer-events-none">
+    <div className="absolute bottom-20 right-20 z-49 flex flex-col items-end pointer-events-none">
       <div className={`relative mb-[20px] ${showBubble ? "" : "invisible"}`}>
         {/* Bubble tail pointing down-right toward Clippy */}
         <div className="w-0 h-0 absolute -bottom-[15px] right-[66%]             border-[15px] border-transparent border-r-black    " />

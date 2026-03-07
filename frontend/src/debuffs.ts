@@ -108,7 +108,6 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "The cursor appears a space away from its actual position.",
   },
   [Debuff.screensaver]: {
-    // TODO
     type: "input8",
     title: "Are You Still There?",
     description: "After brief inactivity, a DVD screensaver covers the editor.",
@@ -146,10 +145,10 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "Adds fake error squiggles to the code.",
   },
   [Debuff.subway_surfers]: {
-    // TODO
     type: "visual7",
     title: "Brainrot Mode",
     description: "Adds Subway Surfers to the side.",
+    defaultDuration: 60,
   },
   [Debuff.waves]: {
     // TODO

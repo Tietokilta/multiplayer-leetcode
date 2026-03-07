@@ -5,7 +5,7 @@ import { useClippyPreload } from "./clippyData";
 import { DebuffQueue } from "./DebuffQueue";
 import { DebuffSelector } from "./DebuffSelector";
 import { RenderedEditor } from "./Editor";
-import Game from "./Game";
+import Game, { SubwaySurfers } from "./Game";
 import LocalKeyboard from "./LocalKeyboard";
 import Login from "./Login";
 import { PlayerController } from "./PlayerController";
@@ -87,10 +87,11 @@ function App() {
 
   useClippyPreload();
 
+  const minimalState = gameHasConnected && canConnect;
   const connState = (
-    <div className="absolute top-6 right-6 flex items-center">
+    <div className={`absolute ${minimalState ? "top-2 right-2" : "top-6 right-6"} z-100 flex items-center text-xs`}>
       <span
-        className={`w-4 h-4 rounded-full inline-block mr-2 ${stateColors[gameConnected]} cursor-pointer`}
+        className={`w-4 h-4 rounded-full inline-block mr-2 text-black text-semibold text-center ${stateColors[gameConnected]} cursor-pointer`}
         onDoubleClick={(evt) => {
           if (evt.shiftKey) {
             setMyId("");
@@ -100,10 +101,16 @@ function App() {
           }
           controller.server.disconnect();
         }}
-      />
-      <span className="mr-2">Game server</span>
-      <span className={`w-4 h-4 rounded-full inline-block mr-2 ${stateColors[keyboardConnected]}`} />
-      <span className="mr-2">Keyboard server</span>
+      >
+        {minimalState && "G"}
+      </span>
+      {!minimalState && <span className="mr-2">Game server</span>}
+      <span
+        className={`w-4 h-4 rounded-full inline-block mr-2 text-black text-semibold text-center ${stateColors[keyboardConnected]}`}
+      >
+        {minimalState && "K"}
+      </span>
+      {!minimalState && <span className="mr-2">Keyboard server</span>}
     </div>
   );
 
@@ -186,13 +193,16 @@ function App() {
   }
 
   return (
-    <div className="flex flex-col p-4 gap-4 h-screen">
-      {connState}
-      {localKeyboard}
-      {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
-      {showKeyboards && <KeyboardList controller={controller} />}
-      <Game outputRef={outputRef} controller={controller} />
-      <DebuffQueue controller={controller} />
+    <div className="flex">
+      <div className="flex-1 flex flex-col p-4 gap-4 h-screen">
+        {connState}
+        {localKeyboard}
+        {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
+        {showKeyboards && <KeyboardList controller={controller} />}
+        <Game outputRef={outputRef} controller={controller} />
+        <DebuffQueue controller={controller} />
+      </div>
+      <SubwaySurfers controller={controller} />
     </div>
   );
 }
