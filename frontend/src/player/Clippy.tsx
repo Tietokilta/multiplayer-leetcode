@@ -12,6 +12,17 @@ interface ClippyProps {
   done?: boolean;
 }
 
+const altJsx = <p>All right, just a moment!</p>;
+const doneJsx = (
+  <>
+    <p>There you go, much better!</p>
+    <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
+      <li className="pl-1">Thanks, Clippy!</li>
+      <li className="pl-1">Please help me more!</li>
+    </ul>
+  </>
+);
+
 export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [schedule] = useState(() => buildSchedule(duration));
@@ -83,54 +94,46 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
         <div className="w-0 h-0 absolute -bottom-[13px] right-[calc(66%_+_1px)] border-[15px] border-transparent border-r-[#ffffcc]" />
         {/* Chat bubble */}
         <div className="relative bg-[#ffffcc] border border-black rounded-lg p-3 w-52 text-gray-800 flex flex-col gap-3">
-          {name === Debuff.clippy_attack ? (
-            done ? (
-              <>
-                <p>There you go, much better!</p>
-                <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
-                  <li className="pl-1">Thanks, Clippy!</li>
-                  <li className="pl-1">Please help me more!</li>
-                </ul>
-              </>
-            ) : altText ? (
-              <p>All right, just a moment!</p>
-            ) : (
-              <>
-                <p>It looks like you're struggling with the algorithm!</p>
-                <p>Would you like help?</p>
-                <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
-                  <li className="pl-1">Get help with the algorithm</li>
-                  <li className="pl-1">Yes, definitely get help with the algorithm</li>
-                </ul>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" /> Show this more often
-                </label>
-              </>
-            )
+          {done ? (
+            doneJsx
+          ) : altText ? (
+            altJsx
+          ) : name === Debuff.clippy_attack ? (
+            <>
+              <p>It looks like you're struggling with the algorithm!</p>
+              <p>Would you like help?</p>
+              <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
+                <li className="pl-1">Get help with the algorithm</li>
+                <li className="pl-1">Yes, definitely get help with the algorithm</li>
+              </ul>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" /> Show this more often
+              </label>
+            </>
           ) : name === Debuff.clippy_comments ? (
-            done ? (
-              <>
-                <p>There you go, much better!</p>
-                <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
-                  <li className="pl-1">Thanks, Clippy!</li>
-                  <li className="pl-1">Please help me more!</li>
-                </ul>
-              </>
-            ) : altText ? (
-              <p>All right, just a moment!</p>
-            ) : (
-              <>
-                <p>It looks like you don't understand the code you're writing!</p>
-                <p>Would you like help?</p>
-                <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
-                  <li className="pl-1">Document my algorithm</li>
-                  <li className="pl-1">Add some helpful comments</li>
-                </ul>
-                <label className="flex items-center gap-1">
-                  <input type="checkbox" /> Show this more often
-                </label>
-              </>
-            )
+            <>
+              <p>It looks like you don't understand the code you're writing!</p>
+              <p>Would you like help?</p>
+              <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
+                <li className="pl-1">Document my algorithm</li>
+                <li className="pl-1">Add some helpful comments</li>
+              </ul>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" /> Show this more often
+              </label>
+            </>
+          ) : name === Debuff.clippy_refactor ? (
+            <>
+              <p>It looks like your variable names don't make much sense!</p>
+              <p>Would you like help?</p>
+              <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
+                <li className="pl-1">Rename variables to be more descriptive</li>
+                <li className="pl-1">Use consistent naming conventions</li>
+              </ul>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" /> Show this more often
+              </label>
+            </>
           ) : (
             "Unknown debuff"
           )}

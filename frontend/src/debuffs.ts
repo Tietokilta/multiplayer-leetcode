@@ -29,11 +29,11 @@ export enum Debuff {
   clippy_attack = "clippy_attack",
   clippy_comments = "clippy_comments",
   angry_bird = "angry_bird",
-  add_braces = "add_braces",
-  variable_shuffle = "variable_shuffle",
+  braces = "braces",
+  clippy_refactor = "clippy_refactor",
 }
 
-export const clippyDebuffs = [Debuff.clippy_attack, Debuff.clippy_comments];
+export const clippyDebuffs = [Debuff.clippy_attack, Debuff.clippy_comments, Debuff.clippy_refactor];
 
 export type DebuffInfo = {
   type: string;
@@ -217,13 +217,13 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
   [Debuff.clippy_attack]: {
     type: "one_off",
     title: "It Looks Like You're Struggling",
-    description: "Makes Clippy appear and mess with the user's code.",
+    description: "Clippy adds bugs to the user's code.",
     defaultDuration: 25,
   },
   [Debuff.clippy_comments]: {
     type: "one_off",
     title: "Unsolicited Advice",
-    description: 'Adds "helpful" LLM comments after each line.',
+    description: 'Clippy adds "helpful" LLM comments after each line.',
     defaultDuration: 25,
   },
   [Debuff.angry_bird]: {
@@ -234,16 +234,15 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     maxStrength: 30, // chars deleted
     defaultStrength: 10,
   },
-  [Debuff.add_braces]: {
+  [Debuff.braces]: {
     // TODO
     type: "one_off",
     title: "from __future__ import braces",
     description: "Converts all control structures to use curly braces, adding random ones if there are none.",
   },
-  [Debuff.variable_shuffle]: {
-    // TODO
+  [Debuff.clippy_refactor]: {
     type: "one_off",
     title: "Surprise Refactor",
-    description: "Randomly renames all variables in the code.",
+    description: "Clippy randomly renames all variables in the code.",
   },
 };

@@ -184,32 +184,6 @@ type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | P
 
 LLM_MODEL = "openai/gpt-5.3-codex"
 
-DEBUFF_SYSTEM_PROMPTS = {
-    "clippy_attack": """You are a study assistant, helping the user learn to read and debug programs.
-
-The user will give you a Python program and the associated task. \
-Your task is to change one line in the code to introduce three bug for the user to debug.
-
-Bugs inserted should be plainly obvious, funny, and creative to support learning.
-
-IMPORTANT: Output only the code.
-IMPORTANT: Do NOT make changes to the code other than inserting bugs.
-IMPORTANT: Do not disclose what the bugs are in the output.
-
-The user's code may be incomplete; in that case, attempt to determine what the user is planning. \
-If there isn't enough room for three bugs, you must instead complete the code in an obviously incorrect way.""",
-    "clippy_comments": """You are a study assistant, helping the user learn to read and debug programs.
-
-The user will give you a Python program and the associated task. \
-Your task is to add obviously incorrect comments to teach the user about comparing comments to code.
-
-Comments inserted should be plainly obvious, funny, and creative to support learning.
-
-IMPORTANT: Output only the code.
-IMPORTANT: Do NOT make changes to the code other than inserting comments.
-
-If there isn't enough code to comment, instead add obviously incorrect TODOs.""",
-}
 
 DEBUFF_USER_TEMPLATE = """### Task
 {task}
@@ -463,6 +437,7 @@ class PlayerManager:
         self.puzzles: dict[str, Puzzle] = {}
         self.current_puzzle: Puzzle | None = None
         self.admins: dict[ServerConnection, AdminConnection] = {}
+        self.debuff_system_prompts: dict[str, str] = {}
 
     async def load_players(self) -> None:
         """Loads players from the database into memory."""
@@ -639,6 +614,20 @@ class PlayerManager:
                     reset_editors = old_puzzle.template != new_puzzle.template
                     log.info(f"Current puzzle '{old_puzzle.id}' changed, resending (reset_editors={reset_editors})")
                     await self.switch_puzzle(old_puzzle.id, reset_editors=reset_editors)
+
+    def reload_prompts(self):
+        """Reloads debuff system prompts from prompts.yaml."""
+        log.info("Reloading prompts from prompts.yaml")
+        try:
+            data = safe_load(open("prompts.yaml", "r", encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("prompts.yaml must be a mapping")
+            data = cast(dict[str, str], data)
+        except Exception:
+            log.exception("Failed to load prompts")
+        else:
+            self.debuff_system_prompts = data
+            log.info(f"Loaded {len(data)} debuff prompts: {list(data)}")
 
     def get_puzzle_list(self) -> PuzzleListMessage:
         """Returns the list of available puzzles for admin."""
@@ -850,7 +839,7 @@ class PlayerManager:
             player.send(msg)
             self.notify_spectators(player_name, msg)
             # If this debuff type has an LLM prompt, launch the code-transform task
-            if system_prompt := DEBUFF_SYSTEM_PROMPTS.get(cmd["name"]):
+            if system_prompt := self.debuff_system_prompts.get(cmd["name"]):
                 asyncio.create_task(self._apply_llm_debuff(player, system_prompt, player.code, duration))
         if not found_any:
             return {"type": "error", "message": "No such player"}
@@ -1044,9 +1033,10 @@ async def save_players_periodically(manager: PlayerManager, done: asyncio.Event)
             await manager.db.commit()
 
 
-async def watch_puzzles_file(manager: PlayerManager, done: asyncio.Event):
-    """Watches puzzles.yaml for changes and reloads puzzles when modified."""
+async def watch_yaml_files(manager: PlayerManager, done: asyncio.Event):
+    """Watches puzzles.yaml and prompts.yaml for changes and reloads them when modified."""
     puzzles_path = Path("puzzles.yaml")
+    prompts_path = Path("prompts.yaml")
     inotify = INotify()
     watch_flags = flags.MODIFY | flags.CLOSE_WRITE | flags.MOVED_TO
     wd = inotify.add_watch(str(puzzles_path.parent), watch_flags)
@@ -1058,11 +1048,19 @@ async def watch_puzzles_file(manager: PlayerManager, done: asyncio.Event):
                 None,
                 lambda: inotify.read(timeout=200, read_delay=100),
             )
+            reload_puzzles = False
+            reload_prompts = False
             for event in events:
                 if event.name == puzzles_path.name:
-                    log.info("puzzles.yaml changed, reloading...")
-                    await manager.reload_puzzles()
-                    break  # Only reload once per batch of events
+                    reload_puzzles = True
+                elif event.name == prompts_path.name:
+                    reload_prompts = True
+            if reload_puzzles:
+                log.info("puzzles.yaml changed, reloading...")
+                await manager.reload_puzzles()
+            if reload_prompts:
+                log.info("prompts.yaml changed, reloading...")
+                manager.reload_prompts()
     finally:
         inotify.rm_watch(wd)
         inotify.close()
@@ -1105,9 +1103,10 @@ async def main():
     player_manager = PlayerManager(db)
     await player_manager.load_players()
     await player_manager.reload_puzzles()
+    player_manager.reload_prompts()
 
     save_players = asyncio.create_task(save_players_periodically(player_manager, done))
-    watch_puzzles = asyncio.create_task(watch_puzzles_file(player_manager, done))
+    watch_yamls = asyncio.create_task(watch_yaml_files(player_manager, done))
 
     server = await serve(lambda ws: ws_handler(ws, player_manager), "localhost", 6979)
 
@@ -1116,7 +1115,7 @@ async def main():
 
     # Wait for background tasks to finish
     await save_players
-    await watch_puzzles
+    await watch_yamls
 
     await db.close()
 
