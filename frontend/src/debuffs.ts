@@ -118,6 +118,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "After brief inactivity, a DVD screensaver covers the editor.",
     maxStrength: 10000, // 10000 - ms of inactivity before screensaver
     defaultStrength: 8000,
+    defaultDuration: 60,
   },
 
   // Stackable visual debuffs:

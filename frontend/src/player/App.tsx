@@ -5,7 +5,7 @@ import { useClippyPreload } from "./clippyData";
 import { DebuffQueue } from "./DebuffQueue";
 import { DebuffSelector } from "./DebuffSelector";
 import { RenderedEditor } from "./Editor";
-import Game, { SubwaySurfers } from "./Game";
+import Game, { LightsOut, Screensaver, SubwaySurfers } from "./Game";
 import LocalKeyboard from "./LocalKeyboard";
 import Login from "./Login";
 import { PlayerController } from "./PlayerController";
@@ -194,15 +194,17 @@ function App() {
 
   return (
     <div className="flex">
-      <div className="flex-1 flex flex-col p-4 gap-4 h-screen">
-        {connState}
-        {localKeyboard}
-        {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
+      {connState}
+      {localKeyboard}
+      <div className="flex-1 relative flex flex-col p-4 gap-4 h-screen">
         {showKeyboards && <KeyboardList controller={controller} />}
+        {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
         <Game outputRef={outputRef} controller={controller} />
         <DebuffQueue controller={controller} />
       </div>
       <SubwaySurfers controller={controller} />
+      <Screensaver controller={controller} />
+      <LightsOut controller={controller} />
     </div>
   );
 }

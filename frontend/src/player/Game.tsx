@@ -69,14 +69,14 @@ function CatVideo({ controller }: { controller: PlayerController }) {
     controller,
     videoId: "lEtLb86O7NQ",
     debuff: Debuff.keyboard_cat,
-    className: "fixed bottom-20 right-0 z-31 w-[50vw] aspect-video",
+    className: "absolute bottom-20 right-0 z-31 w-1/2 aspect-video",
     activeClass: "visible",
     inactiveClass: "invisible",
     duration: 15000,
   });
 }
 
-function Screensaver({ controller }: { controller: PlayerController }) {
+export function Screensaver({ controller }: { controller: PlayerController }) {
   const active = controller.usePlayerStore((state) => state.screensaverActive);
   const delayRef = useRef({ x: 0, y: 0 });
   const prevActiveRef = useRef<boolean>(null);
@@ -103,7 +103,7 @@ type Props = {
   controller: PlayerController;
 };
 
-function LightsOut({ controller }: { controller: PlayerController }) {
+export function LightsOut({ controller }: { controller: PlayerController }) {
   const debuff = controller.usePlayerStore((state) =>
     state.activeDebuffNames.has(Debuff.lights_out)
       ? state.debuffs.find((d) => d.name === Debuff.lights_out)
@@ -142,8 +142,6 @@ function Game({ outputRef, controller }: Props) {
   return (
     <>
       <CatVideo controller={controller} />
-      <Screensaver controller={controller} />
-      <LightsOut controller={controller} />
       <ClippyController controller={controller} />
       {puzzle ? (
         <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
