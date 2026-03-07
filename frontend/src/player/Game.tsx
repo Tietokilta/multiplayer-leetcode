@@ -46,6 +46,7 @@ function YoutubeEmbed({
       ref={iframeRef}
       src={`https://www.youtube.com/embed/${videoId}?${active ? "autoplay=1&mute=0" : "autoplay=0&mute=1"}&enablejsapi=1&controls=0`}
       allow="autoplay; encrypted-media"
+      tabIndex={-1}
       className={`${className} ${active ? activeClass : inactiveClass} border-none block pointer-events-none`}
     />
   );

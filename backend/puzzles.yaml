@@ -128,7 +128,7 @@
         import inspect, functools
         @functools.wraps(f)
         def wrapper(self, *args, **kwargs):
-          if inspect.stack()[1].f_code.co_qualname != "Random.shuffle":
+          if inspect.stack()[1].frame.f_code.co_qualname != "Random.shuffle":
             raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
           return f(self, *args, **kwargs)
         return wrapper
@@ -151,7 +151,7 @@
         [1],
         [3, 2, 5, 1, 4],
         [10, -1, 2, 0, 5],
-        [_random.randint(-10, 10) for _ in range(_random.randint(5, 7))]
+        [_random.randint(-10, 10) for _ in range(_random.randint(4, 5))]
       ]
 
       for _lst in _lsts:

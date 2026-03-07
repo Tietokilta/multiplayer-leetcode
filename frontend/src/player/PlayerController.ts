@@ -217,7 +217,7 @@ export class PlayerController {
       case "editor":
         this.editor.load(data);
         if (clippyDebuffs.some((d) => this.hasDebuff(d))) {
-          this.update({ clippyEdited: true });
+          this.update({ clippyEdited: true, clippyBlocked: 0 });
         }
         this.rerender();
         break;

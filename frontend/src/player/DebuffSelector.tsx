@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { debuffInfo, type Debuff } from "../debuffs";
 import { PlayerController } from "./PlayerController";
 
@@ -30,7 +30,8 @@ export function DebuffSelector({ controller, myId }: { controller: PlayerControl
     setStrength(initialStrength(name));
   }
 
-  function administer() {
+  function administer(evt: MouseEvent<HTMLButtonElement>) {
+    evt.currentTarget.blur();
     controller.server.send({
       type: "administer_debuff",
       players: [myId],

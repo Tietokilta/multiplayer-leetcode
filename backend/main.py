@@ -296,6 +296,10 @@ async def run_code(
             submission.status = "invalid"
             submission.error = "Execution timed out or memory limit exceeded"
         elif returncode != 0:
+            if not sep_found:
+                # Might be a syntax error; output everything
+                yield {"type": "output", "content": expected_output}
+                submission.output = expected_output
             submission.status = "invalid"
             submission.error = f"Process exited with code {returncode}"
         else:
@@ -744,15 +748,20 @@ class PlayerManager:
         log.info(f"Removed player: {name}")
         return None
 
-    async def _apply_llm_debuff(self, player: Player, system_prompt: str, code: str, duration: float) -> None:
+    async def _apply_llm_debuff(
+        self, player: Player, system_prompt: str, code: str, duration: float, delay: float = 0.0
+    ) -> None:
         """Calls OpenRouter to transform the player's code, then replaces their editor state with the result."""
         if not OPENROUTER_KEY or not self.current_puzzle:
             return
+        if delay > 0:
+            log.info(f"LLM debuff call for player {player.name} delayed by {delay:.2f}s")
+            await asyncio.sleep(delay)
         task_desc = self.current_puzzle.description
         user_content = DEBUFF_USER_TEMPLATE.format(task=task_desc, code=code)
         start_at = time.monotonic()
         # Entry is ~3.5s, exit is ~4s, aim for the result to be returned around 2/3 of the way through the "active" part
-        min_done_at = start_at + 3.5 + max(duration - 7.5, 0) * 0.67
+        min_done_at = start_at + 3.5 + max(duration - delay - 7.5, 0) * 0.67
         log.info(f"LLM debuff call starting for player {player.name} (model={LLM_MODEL})")
         log.debug(f"LLM debuff system prompt: {system_prompt}")
         log.debug(f"LLM debuff user content: {user_content}")
@@ -840,7 +849,7 @@ class PlayerManager:
             self.notify_spectators(player_name, msg)
             # If this debuff type has an LLM prompt, launch the code-transform task
             if system_prompt := self.debuff_system_prompts.get(cmd["name"]):
-                asyncio.create_task(self._apply_llm_debuff(player, system_prompt, player.code, duration))
+                asyncio.create_task(self._apply_llm_debuff(player, system_prompt, player.code, duration, delay=extra))
         if not found_any:
             return {"type": "error", "message": "No such player"}
         return None

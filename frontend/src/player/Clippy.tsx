@@ -32,11 +32,12 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
   useEffect(() => {
     const entryEndMs = schedule[1].startMs;
     const exitStartMs = schedule[schedule.length - 2].startMs;
-    const firstThirdMs = (entryEndMs + exitStartMs) / 3;
+    // Change to alt text after 40% of the time between entry end and exit start
+    const altTextMs = entryEndMs * 0.6 + exitStartMs * 0.4;
 
     const showTimer = setTimeout(() => setShowBubble(true), entryEndMs);
     const hideTimer = setTimeout(() => setShowBubble(false), exitStartMs);
-    const textTimer = setTimeout(() => setAltText(true), firstThirdMs);
+    const textTimer = setTimeout(() => setAltText(true), altTextMs);
 
     return () => {
       clearTimeout(showTimer);
@@ -129,6 +130,18 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
               <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
                 <li className="pl-1">Rename variables to be more descriptive</li>
                 <li className="pl-1">Use consistent naming conventions</li>
+              </ul>
+              <label className="flex items-center gap-1">
+                <input type="checkbox" /> Show this more often
+              </label>
+            </>
+          ) : name === Debuff.clippy_syntax ? (
+            <>
+              <p>It looks like you're having trouble with the new braces-based Python syntax!</p>
+              <p>Would you like help?</p>
+              <ul className="space-y-2 pl-5 list-image-[url('/clippy/bullet.png')]">
+                <li className="pl-1">Fix my obvious syntax errors</li>
+                <li className="pl-1">from __future__ import braces</li>
               </ul>
               <label className="flex items-center gap-1">
                 <input type="checkbox" /> Show this more often

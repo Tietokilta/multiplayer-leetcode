@@ -29,11 +29,16 @@ export enum Debuff {
   clippy_attack = "clippy_attack",
   clippy_comments = "clippy_comments",
   angry_bird = "angry_bird",
-  braces = "braces",
+  clippy_syntax = "clippy_syntax",
   clippy_refactor = "clippy_refactor",
 }
 
-export const clippyDebuffs = [Debuff.clippy_attack, Debuff.clippy_comments, Debuff.clippy_refactor];
+export const clippyDebuffs = [
+  Debuff.clippy_attack,
+  Debuff.clippy_comments,
+  Debuff.clippy_refactor,
+  Debuff.clippy_syntax,
+];
 
 export type DebuffInfo = {
   type: string;
@@ -233,8 +238,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     maxStrength: 30, // chars deleted
     defaultStrength: 10,
   },
-  [Debuff.braces]: {
-    // TODO
+  [Debuff.clippy_syntax]: {
     type: "one_off",
     title: "from __future__ import braces",
     description: "Converts all control structures to use curly braces, adding random ones if there are none.",

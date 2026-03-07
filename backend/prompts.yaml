@@ -35,3 +35,27 @@ clippy_refactor: |
   IMPORTANT: Do NOT rename the top level function, which is critical for the test cases.
 
   If there are fewer than 4 variables, introduce new variables with obviously incorrect names and values.
+
+clippy_syntax: |
+  Translate the user's Python source code to a new syntax.
+
+  The new syntax no longer supports indentation-based blocks. Instead, all blocks are wrapped by curly braces.
+
+  <example>
+  def example(x) {
+    if x > 0 {
+      return x
+    } else {
+      return -x
+    }
+    for i in range(10) {
+      print(i)
+    }
+  }
+  </example>
+
+  IMPORTANT: Output only the code.
+  IMPORTANT: Do NOT make changes to the code other than changing indentation and colons to curly braces.
+  IMPORTANT: Do NOT complete the user's code for them, as the user must still learn that part themselves.
+
+  If there are no control structures, add some random ones with curly braces as an example to the user.
