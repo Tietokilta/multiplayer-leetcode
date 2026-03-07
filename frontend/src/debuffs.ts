@@ -18,6 +18,7 @@ export enum Debuff {
   subway_surfers = "subway_surfers",
   waves = "waves",
   cursor_blink = "cursor_blink",
+  emoji_confetti = "emoji_confetti",
   shake = "shake",
   lights_out = "lights_out",
   fog_of_war = "fog_of_war",
@@ -139,10 +140,10 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     description: "Shows syntax errors from parsing as a wrong language.",
   },
   [Debuff.confetti]: {
-    // TODO
     type: "visual5",
     title: "Party Pooper",
     description: "Makes confetti appear on each keystroke.",
+    defaultDuration: 60,
   },
   [Debuff.squiggles]: {
     // TODO
@@ -168,6 +169,12 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     type: "visual9",
     title: "Blink and You'll Miss It",
     description: "Makes the cursor blink rapidly in an unsettling random pattern.",
+  },
+  [Debuff.emoji_confetti]: {
+    type: "visual10",
+    title: "😂😂😂",
+    description: "Makes emoji appear on each keystroke.",
+    defaultDuration: 60,
   },
 
   // Big visual debuffs:

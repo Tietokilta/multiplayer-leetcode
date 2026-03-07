@@ -32,12 +32,13 @@ The project consists of three components:
 3. **Frontend** (`frontend/`) - React/Vite web client
   - Text editing
   - Player penalties (visual effects, keyboard usage rules, key remapping)
-  - Submissions
+  - Connects to both game server and keyboard server via WebSockets (`connection.ts`)
   - Admin frontend for control and spectation
-  - Features:
+  - Player frontend:
     - Custom text editor implementation (`Editor.tsx`) - not using any editor library
-    - Keyboard layout handling (Finnish layout default, US layout available)
-    - Connects to both game server and keyboard server via WebSockets
+    - Keyboard layout handling (Finnish layout default, US layout available; `keyboards.ts`)
+    - All game logic goes through `PlayerController.ts`, which stores mutable state and publishes a Zustand store for React
+    - Support for numerous debuffs that make the coding experience more difficult and funny (defined in `debuffs.ts`, implemented all over)
 
 ## Development Commands
 

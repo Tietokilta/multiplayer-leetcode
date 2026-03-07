@@ -16,6 +16,7 @@ import { EditorState } from "./Editor";
 import { KeyboardServerHandler } from "./KeyboardServerHandler";
 import { mapKeyboardEvent } from "./LocalKeyboard";
 import { TurnTracker } from "./TurnTracker";
+import { fireConfetti, fireEmojiConfetti } from "./confetti";
 
 export type ActiveDebuff = {
   name: Debuff;
@@ -315,6 +316,8 @@ export class PlayerController {
           row: this.editor.row,
           col: this.editor.col,
         });
+        if (this.hasDebuff(Debuff.confetti)) fireConfetti();
+        if (this.hasDebuff(Debuff.emoji_confetti)) fireEmojiConfetti();
         let debuff;
         if (
           action === "edit" &&
