@@ -145,10 +145,10 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     defaultDuration: 60,
   },
   [Debuff.squiggles]: {
-    // TODO
     type: "visual6",
     title: "Impostor Syndrome",
     description: "Adds fake error squiggles to the code.",
+    defaultDuration: 60,
   },
   [Debuff.subway_surfers]: {
     type: "visual7",

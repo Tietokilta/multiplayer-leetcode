@@ -300,6 +300,11 @@ html.debuff-disco_mode [data-disco="9"] {
   color: oklch(0.9 0.2 144);
 }
 
+html.debuff-squiggles .mlc--squiggle {
+  text-decoration: underline wavy red;
+  text-decoration-skip-ink: none;
+}
+
 @property --wave-phase {
   syntax: "<angle>";
   inherits: true;

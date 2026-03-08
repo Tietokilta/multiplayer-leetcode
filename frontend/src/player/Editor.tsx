@@ -6,6 +6,36 @@ import { finnishLayout, type KeyboardLayout } from "../keyboards";
 import type { EditorMessage, KeyState } from "../messages";
 import type { PlayerController } from "./PlayerController";
 
+function hashString(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+  }
+  return h;
+}
+
+function computeSquiggleChars(line: string[]): boolean[] | null {
+  const lineStr = line.join("");
+  const mode = hashString(lineStr) % 4;
+  if (mode === 0) return null;
+
+  const result = new Array(line.length).fill(false);
+
+  if (mode === 1) {
+    const match = lineStr.match(/\S(.*\S)?/);
+    if (!match) return null;
+    for (let j = match.index!; j < match.index! + match[0].length; j++) result[j] = true;
+  } else {
+    for (const match of lineStr.matchAll(/\S+/g)) {
+      if (hashString(match[0]) % 2 === 1) {
+        for (let j = match.index!; j < match.index! + match[0].length; j++) result[j] = true;
+      }
+    }
+  }
+
+  return result.some(Boolean) ? result : null;
+}
+
 function getTokenTypes(code: string[][]): (string | null)[][] {
   const fullCode = code.map((line) => line.join("")).join("\n");
   const tokens = Prism.tokenize(fullCode, Prism.languages.python);
@@ -79,10 +109,12 @@ export class EditorState {
     const funkyFonts = debuffs.has(Debuff.funky_fonts);
     const discoMode = debuffs.has(Debuff.disco_mode);
     const waves = debuffs.has(Debuff.waves);
+    const squiggles = debuffs.has(Debuff.squiggles);
     const tokenTypes = getTokenTypes(this.code);
     return this.code.map((line, i) => {
       const isCursorLine = i === this.row;
       const farFromCursor = Math.abs(i - this.row) > 1;
+      const squiggleChars = squiggles ? computeSquiggleChars(line) : null;
       return (
         <div key={i} className={`whitespace-pre-wrap font-mono mlc--line ${farFromCursor ? "mlc--far" : ""}`}>
           {line.map((char, j) => {
@@ -95,7 +127,11 @@ export class EditorState {
                 className={
                   isCursorChar
                     ? "mlc--cursor"
-                    : [farFromCursorChar ? "mlc--far-char" : "", tokenType ? `token ${tokenType}` : ""]
+                    : [
+                        farFromCursorChar && "mlc--far-char",
+                        tokenType && `token ${tokenType}`,
+                        squiggleChars?.[j] && "mlc--squiggle",
+                      ]
                         .filter(Boolean)
                         .join(" ")
                 }
