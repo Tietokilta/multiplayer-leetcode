@@ -335,6 +335,11 @@ html.debuff-waves .mlc--editor span {
   transform: translateY(calc(sin(var(--wave-phase) + var(--wave-offset, 0deg)) * var(--wave-strength)));
 }
 
+html.debuff-hyperfocus .mlc--editor span {
+  display: inline-block;
+  line-height: 1;
+}
+
 @keyframes fadeout {
   0% {
     opacity: 1;

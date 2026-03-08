@@ -14,6 +14,16 @@ function hashString(s: string): number {
   return h;
 }
 
+function hyperfocusTransform(dx: number, dy: number): string {
+  const charAspect = 2; // characters are roughly twice as tall as they are wide
+  const dist = Math.hypot(dx, dy * charAspect);
+  const scale = dist > 6 ? 0.5 : (dist / 3 - 2) ** 2 + 0.5;
+  const push = dist > 6 ? 46 / 9 - (dist - 6) / 2 : dist ** 3 / 27 - (2 * dist ** 2) / 3 + (95 * dist) / 27;
+  const dirX = dist ? dx / dist : 0;
+  const dirY = dist ? dy / charAspect / dist : 0;
+  return `translate(${push * dirX * 100}%, ${push * dirY * 100}%) scale(${scale})`;
+}
+
 function computeSquiggleChars(line: string[]): boolean[] | null {
   const lineStr = line.join("");
   const mode = hashString(lineStr) % 4;
@@ -109,6 +119,7 @@ export class EditorState {
     const funkyFonts = debuffs.has(Debuff.funky_fonts);
     const discoMode = debuffs.has(Debuff.disco_mode);
     const waves = debuffs.has(Debuff.waves);
+    const hyperfocus = debuffs.has(Debuff.hyperfocus);
     const squiggles = debuffs.has(Debuff.squiggles);
     const tokenTypes = getTokenTypes(this.code);
     return this.code.map((line, i) => {
@@ -137,7 +148,13 @@ export class EditorState {
                 }
                 data-font={funkyFonts ? ((i * 31 + j * 37 + i * j) >>> 0) % 7 : undefined}
                 data-disco={discoMode ? ((i * 53 + j * 29 + i * j * 3) >>> 0) % 10 : undefined}
-                style={waves ? ({ "--wave-offset": `${(j * 2 + i) * 22.5}deg` } as React.CSSProperties) : undefined}
+                style={
+                  waves
+                    ? ({ "--wave-offset": `${(j * 2 + i) * 22.5}deg` } as React.CSSProperties)
+                    : hyperfocus
+                      ? { transform: hyperfocusTransform(j - col, i - this.row) }
+                      : undefined
+                }
               >
                 {char}
               </span>

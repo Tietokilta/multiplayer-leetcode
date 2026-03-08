@@ -205,7 +205,6 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     defaultStrength: 3,
   },
   [Debuff.hyperfocus]: {
-    // TODO
     type: "visual",
     title: "Hyperfocus",
     description: "Zooms in the characters near the cursor.",
