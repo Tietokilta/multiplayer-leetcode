@@ -157,7 +157,6 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     defaultDuration: 60,
   },
   [Debuff.waves]: {
-    // TODO
     type: "visual8",
     title: "Drowning in Code",
     description: "Makes the characters wave around.",
@@ -202,6 +201,8 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     type: "visual",
     title: "Rough Seas",
     description: "Minecraft-like nausea effect on the editor.",
+    maxStrength: 7, // stuff is scaled down diagonally by strength * 0.1
+    defaultStrength: 3,
   },
   [Debuff.hyperfocus]: {
     // TODO
@@ -237,7 +238,7 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Angry Bird",
     description: "Launches an angry bird across the screen, breaking characters as it goes.",
     maxStrength: 30, // chars deleted
-    defaultStrength: 10,
+    defaultStrength: 15,
   },
   [Debuff.clippy_syntax]: {
     type: "one_off",

@@ -191,12 +191,18 @@ html.debuff-nausea .mlc--output {
   animation-delay: -2.7s;
 }
 
+@property --nausea-strength {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0.7;
+}
+
 @keyframes nausea {
   0% {
-    transform: rotate(0deg) scale(0.8, 1) rotate(0deg);
+    transform: rotate(0deg) scale(var(--nausea-strength), 1) rotate(0deg);
   }
   100% {
-    transform: rotate(360deg) scale(0.8, 1) rotate(-360deg);
+    transform: rotate(360deg) scale(var(--nausea-strength), 1) rotate(-360deg);
   }
 }
 
@@ -292,6 +298,36 @@ html.debuff-disco_mode [data-disco="8"] {
 html.debuff-disco_mode [data-disco="9"] {
   background-color: oklch(0.4 0.25 324);
   color: oklch(0.9 0.2 144);
+}
+
+@property --wave-phase {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --wave-strength {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 8px;
+}
+
+@keyframes wave-phase {
+  from {
+    --wave-phase: 0deg;
+  }
+  to {
+    --wave-phase: 360deg;
+  }
+}
+
+html.debuff-waves body {
+  animation: wave-phase 2s linear infinite;
+}
+
+html.debuff-waves .mlc--editor span {
+  display: inline-block;
+  transform: translateY(calc(sin(var(--wave-phase) + var(--wave-offset, 0deg)) * var(--wave-strength)));
 }
 
 @keyframes fadeout {

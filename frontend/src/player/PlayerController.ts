@@ -206,6 +206,12 @@ export class PlayerController {
           // Allow some time for the video to start, then start injecting random keys
           setTimeout(() => this.injectRandomKey(), 1500);
         }
+        if (started.name === Debuff.waves) {
+          document.body.style.setProperty("--wave-strength", `${started.strength}px`);
+        }
+        if (started.name === Debuff.nausea) {
+          document.documentElement.style.setProperty("--nausea-strength", `${1 - started.strength / 10}`);
+        }
       }
     }
 

@@ -78,6 +78,7 @@ export class EditorState {
     }
     const funkyFonts = debuffs.has(Debuff.funky_fonts);
     const discoMode = debuffs.has(Debuff.disco_mode);
+    const waves = debuffs.has(Debuff.waves);
     const tokenTypes = getTokenTypes(this.code);
     return this.code.map((line, i) => {
       const isCursorLine = i === this.row;
@@ -100,6 +101,7 @@ export class EditorState {
                 }
                 data-font={funkyFonts ? ((i * 31 + j * 37 + i * j) >>> 0) % 7 : undefined}
                 data-disco={discoMode ? ((i * 53 + j * 29 + i * j * 3) >>> 0) % 10 : undefined}
+                style={waves ? ({ "--wave-offset": `${(j * 2 + i) * 22.5}deg` } as React.CSSProperties) : undefined}
               >
                 {char}
               </span>
