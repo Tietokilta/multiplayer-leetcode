@@ -1,8 +1,43 @@
+import Prism from "prismjs";
+import "prismjs/components/prism-python";
 import type { ReactNode } from "react";
 import { Debuff } from "../debuffs";
 import { finnishLayout, type KeyboardLayout } from "../keyboards";
 import type { EditorMessage, KeyState } from "../messages";
 import type { PlayerController } from "./PlayerController";
+
+function getTokenTypes(code: string[][]): (string | null)[][] {
+  const fullCode = code.map((line) => line.join("")).join("\n");
+  const tokens = Prism.tokenize(fullCode, Prism.languages.python);
+
+  const flat: (string | null)[] = [];
+
+  function walkTokens(ts: (Prism.Token | string)[], parentType: string | null) {
+    for (const token of ts) {
+      if (typeof token === "string") {
+        for (let i = 0; i < token.length; i++) flat.push(parentType);
+      } else {
+        const content = token.content;
+        const children = Array.isArray(content) ? content : [content];
+        walkTokens(children as (Prism.Token | string)[], token.type);
+      }
+    }
+  }
+
+  walkTokens(tokens, null);
+
+  const result: (string | null)[][] = [];
+  let idx = 0;
+  for (let row = 0; row < code.length; row++) {
+    const lineTypes: (string | null)[] = [];
+    for (let col = 0; col < code[row].length; col++) {
+      lineTypes.push(flat[idx++]);
+    }
+    result.push(lineTypes);
+    idx++; // skip '\n' between lines
+  }
+  return result;
+}
 
 // These keys cannot be "messed up" and are always active
 const navigationKeys = new Set(["LEFT", "RIGHT", "UP", "DOWN", "HOME", "END", "PAGEUP", "PAGEDOWN"]);
@@ -43,6 +78,7 @@ export class EditorState {
     }
     const funkyFonts = debuffs.has(Debuff.funky_fonts);
     const discoMode = debuffs.has(Debuff.disco_mode);
+    const tokenTypes = getTokenTypes(this.code);
     return this.code.map((line, i) => {
       const isCursorLine = i === this.row;
       const farFromCursor = Math.abs(i - this.row) > 1;
@@ -51,10 +87,17 @@ export class EditorState {
           {line.map((char, j) => {
             const isCursorChar = isCursorLine && j === col;
             const farFromCursorChar = !farFromCursor && Math.abs(j - col) > 3;
+            const tokenType = tokenTypes[i]?.[j];
             return (
               <span
                 key={j}
-                className={isCursorChar ? "mlc--cursor" : farFromCursorChar ? "mlc--far-char" : ""}
+                className={
+                  isCursorChar
+                    ? "mlc--cursor"
+                    : [farFromCursorChar ? "mlc--far-char" : "", tokenType ? `token ${tokenType}` : ""]
+                        .filter(Boolean)
+                        .join(" ")
+                }
                 data-font={funkyFonts ? ((i * 31 + j * 37 + i * j) >>> 0) % 7 : undefined}
                 data-disco={discoMode ? ((i * 53 + j * 29 + i * j * 3) >>> 0) % 10 : undefined}
               >

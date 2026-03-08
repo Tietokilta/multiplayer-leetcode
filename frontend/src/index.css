@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "prismjs/themes/prism-okaidia.css";
 
 @font-face {
   font-family: "Comic Neue";

@@ -12,13 +12,12 @@ export enum Debuff {
   screensaver = "screensaver",
   funky_fonts = "funky_fonts",
   disco_mode = "disco_mode",
-  wrong_language = "wrong_language",
+  emoji_confetti = "emoji_confetti",
   confetti = "confetti",
   squiggles = "squiggles",
   subway_surfers = "subway_surfers",
   waves = "waves",
   cursor_blink = "cursor_blink",
-  emoji_confetti = "emoji_confetti",
   shake = "shake",
   lights_out = "lights_out",
   fog_of_war = "fog_of_war",
@@ -133,11 +132,11 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     title: "Rave Review",
     description: "Adds a random background color to each character.",
   },
-  [Debuff.wrong_language]: {
-    // TODO
-    type: "visual3",
-    title: "SyntaxError: unexpected Python",
-    description: "Shows syntax errors from parsing as a wrong language.",
+  [Debuff.emoji_confetti]: {
+    type: "visual4",
+    title: "😂😂😂",
+    description: "Makes emoji appear on each keystroke.",
+    defaultDuration: 60,
   },
   [Debuff.confetti]: {
     type: "visual5",
@@ -169,12 +168,6 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     type: "visual9",
     title: "Blink and You'll Miss It",
     description: "Makes the cursor blink rapidly in an unsettling random pattern.",
-  },
-  [Debuff.emoji_confetti]: {
-    type: "visual10",
-    title: "😂😂😂",
-    description: "Makes emoji appear on each keystroke.",
-    defaultDuration: 60,
   },
 
   // Big visual debuffs:
