@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useInterval, useLocalStorage } from "usehooks-ts";
 import { stateColors } from "../connection";
+import { AngryBird } from "./AngryBird";
 import { useClippyPreload } from "./clippyData";
 import { DebuffQueue } from "./DebuffQueue";
 import { DebuffSelector } from "./DebuffSelector";
@@ -205,6 +206,7 @@ function App() {
       <SubwaySurfers controller={controller} />
       <Screensaver controller={controller} />
       <LightsOut controller={controller} />
+      <AngryBird controller={controller} />
     </div>
   );
 }

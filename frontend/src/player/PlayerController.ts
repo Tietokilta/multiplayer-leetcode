@@ -115,7 +115,7 @@ export class PlayerController {
     this.usePlayerStore.setState(slice);
   }
 
-  private rerender() {
+  rerender() {
     const { activeDebuffNames } = this.usePlayerStore.getState();
     this.update({ rendered: this.editor.render(activeDebuffNames) });
   }

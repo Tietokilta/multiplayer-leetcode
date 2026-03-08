@@ -11,7 +11,8 @@ export type PlayerCmd =
       debuff_type: string;
       strength: number;
       duration: number;
-    };
+    }
+  | { type: "debuff_state"; name: string; payload: unknown };
 
 export type DebuffItem = {
   name: Debuff;

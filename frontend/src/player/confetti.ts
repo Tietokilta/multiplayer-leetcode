@@ -1,4 +1,4 @@
-import JSConfetti from "js-confetti";
+import JSConfetti from "@purkkakoodari/js-confetti";
 
 const confettiCanvas = document.getElementById("confetti") as HTMLCanvasElement;
 
@@ -24,6 +24,8 @@ export function fireConfetti() {
     confettiDispatchPosition: getCursorCenter(),
     confettiRadius: 10,
     confettiNumber: 40,
+    initialVelocityMin: 0.4,
+    initialVelocityMax: 1.0,
   });
 }
 
@@ -34,5 +36,30 @@ export function fireEmojiConfetti() {
     emojis: [emoji],
     emojiSize: 30,
     confettiNumber: 20,
+    initialVelocityMin: 0.4,
+    initialVelocityMax: 0.8,
+  });
+}
+
+export function fireCharConfetti(char: string, color: string, pos: { x: number; y: number }) {
+  jsConfetti.addConfettiAtPosition({
+    confettiDispatchPosition: pos,
+    confettiColors: [color],
+    emojis: [char],
+    emojiSize: 24,
+    confettiNumber: 15,
+    initialVelocityMin: 0.4,
+    initialVelocityMax: 1.0,
+  });
+}
+
+export function fireConfettiAt(pos: { x: number; y: number }, colors: string[]) {
+  jsConfetti.addConfettiAtPosition({
+    confettiDispatchPosition: pos,
+    confettiColors: colors,
+    confettiRadius: 8,
+    confettiNumber: 60,
+    initialVelocityMin: 0.4,
+    initialVelocityMax: 1.2,
   });
 }

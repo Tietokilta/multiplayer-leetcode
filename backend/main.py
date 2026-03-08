@@ -72,7 +72,13 @@ class AdminDebuffCmd(TypedDict):
     duration: float
 
 
-type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd
+class DebuffStateCmd(TypedDict):
+    type: Literal["debuff_state"]
+    name: str
+    payload: object
+
+
+type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | DebuffStateCmd
 
 
 class WelcomeMessage(TypedDict):
@@ -179,7 +185,14 @@ class SpectateDebuffMessage(TypedDict):
     debuffs: list[DebuffItem]
 
 
-type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage
+class SpectateDebuffStateMessage(TypedDict):
+    type: Literal["spectate_debuff_state"]
+    player: str
+    name: str
+    payload: object
+
+
+type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage
 
 
 LLM_MODEL = "openai/gpt-5.3-codex"
@@ -658,7 +671,9 @@ class PlayerManager:
             except Exception:
                 pass  # Ignore send errors
 
-    def notify_spectators(self, player_name: str, message: CodeRunOutput | CodeRunState | PlayerJson | DebuffMessage):
+    def notify_spectators(
+        self, player_name: str, message: CodeRunOutput | CodeRunState | PlayerJson | DebuffMessage | DebuffStateCmd
+    ):
         """Sends a message to all admins spectating a specific player."""
 
         converted: WsMessage
@@ -684,6 +699,12 @@ class PlayerManager:
             converted = {
                 **message,
                 "type": "spectate_debuffs",
+                "player": player_name,
+            }
+        elif message["type"] == "debuff_state":
+            converted = {
+                **message,
+                "type": "spectate_debuff_state",
                 "player": player_name,
             }
         else:
@@ -952,6 +973,8 @@ async def ws_handler(
                         if error := manager.submit(player):
                             log.info(f"Submission error for player {player.name}: {error['message']}")
                             await send(ws, error)
+                    elif msg["type"] == "debuff_state":
+                        manager.notify_spectators(player.name, msg)
                     elif msg["type"] == "administer_debuff" and environ.get("DEBUG"):
                         if error := manager.administer_debuff(msg):
                             await send(ws, error)

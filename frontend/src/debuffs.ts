@@ -232,12 +232,12 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     defaultDuration: 25,
   },
   [Debuff.angry_bird]: {
-    // TODO
     type: "one_off",
     title: "Angry Bird",
     description: "Launches an angry bird across the screen, breaking characters as it goes.",
     maxStrength: 30, // chars deleted
     defaultStrength: 15,
+    defaultDuration: 20,
   },
   [Debuff.clippy_syntax]: {
     type: "one_off",
