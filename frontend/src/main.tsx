@@ -1,9 +1,12 @@
 import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
+import { fireConfetti, fireEmojiConfetti } from "./player/confetti.ts";
 
 const { pathname } = window.location;
 if (pathname === "/spotlight") {
+  window.fireConfetti = fireConfetti;
+  window.fireEmojiConfetti = fireEmojiConfetti;
   window.opener?.postMessage({ type: "spotlight-ready" }, location.origin);
 } else {
   const Admin = lazy(() => import("./admin/Admin.tsx"));

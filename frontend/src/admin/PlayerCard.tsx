@@ -1,7 +1,9 @@
+import { useLayoutEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import type { SpectatorController } from "./SpectatorController";
 import { submissionColors } from "./submissionColors";
 import { DebuffQueue } from "../player/DebuffQueue";
+import { fireConfettiFromEl, fireEmojiConfettiFromEl } from "../player/confetti";
 
 export function PlayerCard({
   name,
@@ -21,8 +23,27 @@ export function PlayerCard({
     })),
   );
 
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    controller.confetti = {
+      fireConfetti: () => {
+        const el = cardRef.current?.querySelector(".mlc--cursor") ?? null;
+        if (el) fireConfettiFromEl(el);
+      },
+      fireEmojiConfetti: () => {
+        const el = cardRef.current?.querySelector(".mlc--cursor") ?? null;
+        if (el) fireEmojiConfettiFromEl(el);
+      },
+    };
+    return () => {
+      controller.confetti = null;
+    };
+  }, [controller]);
+
   return (
     <div
+      ref={cardRef}
       className={`
         mlc--player-card
         border

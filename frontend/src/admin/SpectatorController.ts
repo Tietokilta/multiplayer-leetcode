@@ -1,3 +1,4 @@
+import { Debuff } from "../debuffs";
 import type { DebuffItem } from "../messages";
 import type { AngryBirdInitPayload, AngryBirdPosPayload } from "../player/AngryBird";
 import { EditorState } from "../player/Editor";
@@ -16,6 +17,8 @@ export type SpectatorState = BasePlayerState & {
 };
 
 export class SpectatorController extends AbstractPlayerController<SpectatorState> {
+  confetti: Pick<Window, "fireConfetti" | "fireEmojiConfetti"> | null = null;
+
   protected createState(): SpectatorState {
     return {
       puzzle: null,
@@ -50,6 +53,10 @@ export class SpectatorController extends AbstractPlayerController<SpectatorState
       case "spectate_editor": {
         this.editor.load({ type: "editor", code: msg.code, row: msg.row, col: msg.col });
         this.rerender();
+        if (this.confetti) {
+          if (this.hasDebuff(Debuff.confetti)) this.confetti.fireConfetti();
+          if (this.hasDebuff(Debuff.emoji_confetti)) this.confetti.fireEmojiConfetti();
+        }
         break;
       }
       case "spectate_state":

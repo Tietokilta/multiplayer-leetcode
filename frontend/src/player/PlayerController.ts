@@ -338,7 +338,14 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
       key = reverseNavigationKeys[key] ?? key;
     }
 
-    const action = this.editor.act(port, key, state, !isMyTurn, this.hasDebuff(Debuff.caps_lock), document.hasFocus());
+    const action = this.editor.act(
+      port,
+      key,
+      state,
+      !isMyTurn,
+      this.hasDebuff(Debuff.caps_lock),
+      port === "cat" || document.hasFocus(),
+    );
 
     this.updateScreensaver(true);
 
@@ -390,16 +397,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
   }
 
   private injectRandomKey() {
-    const action = this.editor.act("local", "A", "down", true);
-    if (action === "edit" || action === "navigate") {
-      this.rerender();
-      this.server.send({
-        type: "edit",
-        code: this.editor.getCode(),
-        row: this.editor.row,
-        col: this.editor.col,
-      });
-    }
+    this.handleKey(false, "cat", "A", "down", { input_lag: true });
     let debuff;
     if ((debuff = this.findDebuff(Debuff.keyboard_cat))) {
       const intervalMs = (debuff.duration - 1500) / debuff.strength;

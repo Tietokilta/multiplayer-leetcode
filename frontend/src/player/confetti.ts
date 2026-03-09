@@ -13,32 +13,12 @@ const jsConfetti = new JSConfetti({ canvas: confettiCanvas });
 
 const FUNNY_EMOJIS = ["💀", "🤡", "🐸", "🦆", "🍕", "🎉", "🤦", "😭", "🦧", "🔥", "💩", "🥴"];
 
-function getCursorCenter() {
-  const el = document.querySelector(".mlc--cursor")!;
-  const rect = el.getBoundingClientRect();
-  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-}
-
 export function fireConfetti() {
-  jsConfetti.addConfettiAtPosition({
-    confettiDispatchPosition: getCursorCenter(),
-    confettiRadius: 10,
-    confettiNumber: 40,
-    initialVelocityMin: 0.4,
-    initialVelocityMax: 1.0,
-  });
+  fireConfettiFromEl(document.querySelector(".mlc--cursor")!);
 }
 
 export function fireEmojiConfetti() {
-  const emoji = FUNNY_EMOJIS[Math.floor(Math.random() * FUNNY_EMOJIS.length)];
-  jsConfetti.addConfettiAtPosition({
-    confettiDispatchPosition: getCursorCenter(),
-    emojis: [emoji],
-    emojiSize: 30,
-    confettiNumber: 20,
-    initialVelocityMin: 0.4,
-    initialVelocityMax: 0.8,
-  });
+  fireEmojiConfettiFromEl(document.querySelector(".mlc--cursor")!);
 }
 
 export function fireCharConfetti(char: string, color: string, pos: { x: number; y: number }) {
@@ -61,5 +41,32 @@ export function fireConfettiAt(pos: { x: number; y: number }, colors: string[]) 
     confettiNumber: 60,
     initialVelocityMin: 0.4,
     initialVelocityMax: 1.2,
+  });
+}
+
+function elCenter(el: Element) {
+  const rect = el.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+export function fireConfettiFromEl(el: Element, instance = jsConfetti) {
+  instance.addConfettiAtPosition({
+    confettiDispatchPosition: elCenter(el),
+    confettiRadius: 10,
+    confettiNumber: 40,
+    initialVelocityMin: 0.4,
+    initialVelocityMax: 1.0,
+  });
+}
+
+export function fireEmojiConfettiFromEl(el: Element, instance = jsConfetti) {
+  const emoji = FUNNY_EMOJIS[Math.floor(Math.random() * FUNNY_EMOJIS.length)];
+  instance.addConfettiAtPosition({
+    confettiDispatchPosition: elCenter(el),
+    emojis: [emoji],
+    emojiSize: 30,
+    confettiNumber: 20,
+    initialVelocityMin: 0.4,
+    initialVelocityMax: 0.8,
   });
 }
