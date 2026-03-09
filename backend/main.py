@@ -442,7 +442,10 @@ class AdminConnection:
 
     def __init__(self, ws: ServerConnection):
         self.ws = ws
-        self.spectating: set[str] = set()  # player names being spectated
+        self.spectating: set[str] = set()  # player names being spectated, or {"*"} for all
+
+    def is_spectating(self, player: str) -> bool:
+        return "*" in self.spectating or player in self.spectating
 
 
 class PlayerManager:
@@ -542,9 +545,6 @@ class PlayerManager:
                     player.send({"type": "output", "content": existing_submission.output})
                     self.notify_spectators(player.name, {"type": "state", "state": existing_submission.status})
                     self.notify_spectators(player.name, {"type": "output", "content": existing_submission.output})
-                else:
-                    # Clear submission state for spectating admins
-                    self.notify_spectators_clear_state(player.name)
         return None
 
     async def _submit_task(self, player: Player, submission: Submission) -> None:
@@ -713,24 +713,9 @@ class PlayerManager:
 
         data = json.dumps(converted)
         for admin in self.admins.values():
-            if player_name in admin.spectating:
+            if admin.is_spectating(player_name):
                 try:
                     # TODO: use queue tasks like with players
-                    asyncio.create_task(admin.ws.send(data, True))
-                except Exception:
-                    pass
-
-    def notify_spectators_clear_state(self, player_name: str):
-        """Clears submission state for a player on all spectating admins."""
-        msg: SpectateStateMessage = {
-            "type": "spectate_state",
-            "player": player_name,
-            "state": None,
-        }
-        data = json.dumps(msg)
-        for admin in self.admins.values():
-            if player_name in admin.spectating:
-                try:
                     asyncio.create_task(admin.ws.send(data, True))
                 except Exception:
                     pass
@@ -752,6 +737,23 @@ class PlayerManager:
         self.players[name] = player
         # Notify admins
         self.broadcast_to_admins(self.get_player_list())
+        # Send initial state to wildcard spectators
+        for admin in self.admins.values():
+            if "*" in admin.spectating:
+                asyncio.create_task(
+                    admin.ws.send(
+                        json.dumps(
+                            {
+                                "type": "spectate_editor",
+                                "player": name,
+                                "code": player.code,
+                                "row": player.row,
+                                "col": player.col,
+                            }
+                        ),
+                        True,
+                    )
+                )
         log.info(f"Added player: {name}")
         return None
 
@@ -898,10 +900,15 @@ async def ws_handler(
                     if msg["type"] == "spectate":
                         # Set which players to spectate
                         players = msg.get("players", [])
-                        admin_conn.spectating = set(players) & set(manager.players.keys())
+                        if "*" in players:
+                            admin_conn.spectating = {"*"}
+                            effective = set(manager.players.keys())
+                        else:
+                            admin_conn.spectating = set(players) & set(manager.players.keys())
+                            effective = admin_conn.spectating
                         log.info(f"Admin spectating: {admin_conn.spectating}")
                         # Send current state of all spectated players
-                        for name in admin_conn.spectating:
+                        for name in effective:
                             p = manager.players[name]
                             await send(
                                 ws,
