@@ -111,9 +111,11 @@ function AngryBirdInner({ debuff, controller }: { debuff: ActiveDebuff; controll
     const defLineIdx = controller.editor.code.findIndex((chars) => /^def \w+/.test(chars.join("")));
     let targetX: number, targetY: number;
     if (defLineIdx >= 0 && defLineIdx + 1 < allLines.length) {
-      const lineRect = allLines[defLineIdx + 1].getBoundingClientRect();
-      targetX = lineRect.left + lineRect.width * 0.4;
-      targetY = lineRect.top + lineRect.height / 2;
+      const spans = allLines[defLineIdx + 1].querySelectorAll("span");
+      const first = spans[0].getBoundingClientRect();
+      const last = spans[spans.length - 1].getBoundingClientRect();
+      targetX = first.left + (last.right - first.left) * 0.4;
+      targetY = first.top + first.height / 2;
     } else {
       // Fallback: center of mass of all non-space characters
       let sumX = 0,
