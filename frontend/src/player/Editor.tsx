@@ -186,6 +186,7 @@ export class EditorState {
     state: KeyState,
     messUp: boolean = false,
     swapCase: boolean = false,
+    hasFocus: boolean = true,
   ): EditorAction {
     const layout = this.layouts.get(keyboard) || finnishLayout;
 
@@ -212,6 +213,9 @@ export class EditorState {
 
     // Ignore everything if Meta is held, usually means user is using OS-level shortcuts
     if (this.meta) return false;
+
+    // Ignore everything when not focused
+    if (!hasFocus) return false;
 
     // Special actions
     if (this.ctrl && key === "ENTER") return "submit";

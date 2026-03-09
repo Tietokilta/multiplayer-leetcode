@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import signal
 import time
 import traceback
@@ -19,6 +20,7 @@ from yaml import safe_load
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+GENERATED_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
 SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
 
@@ -78,7 +80,13 @@ class DebuffStateCmd(TypedDict):
     payload: object
 
 
-type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | DebuffStateCmd
+class AssignIdCmd(TypedDict):
+    type: Literal["assign_id"]
+    generated_id: str
+    player: str
+
+
+type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | DebuffStateCmd | AssignIdCmd
 
 
 class WelcomeMessage(TypedDict):
@@ -192,7 +200,12 @@ class SpectateDebuffStateMessage(TypedDict):
     payload: object
 
 
-type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage
+class PendingLoginsMessage(TypedDict):
+    type: Literal["pending_logins"]
+    ids: list[str]
+
+
+type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage | PendingLoginsMessage
 
 
 LLM_MODEL = "openai/gpt-5.3-codex"
@@ -458,6 +471,8 @@ class PlayerManager:
         self.current_puzzle: Puzzle | None = None
         self.admins: dict[ServerConnection, AdminConnection] = {}
         self.debuff_system_prompts: dict[str, str] = {}
+        self.pending_ids: set[str] = set()
+        self.id_mapping: dict[str, str] = {}
 
     async def load_players(self) -> None:
         """Loads players from the database into memory."""
@@ -466,11 +481,18 @@ class PlayerManager:
                 player = Player(*row)
                 self.players[player.name] = player
 
+    def get_pending_logins_msg(self) -> PendingLoginsMessage:
+        return {"type": "pending_logins", "ids": list(self.pending_ids)}
+
     async def player_connected(self, name: str, ws: ServerConnection) -> Player | ActionError:
         """Adds a player connecting via websocket."""
-        if name not in self.players:
+        actual_name = self.id_mapping.get(name, name)
+        if actual_name not in self.players:
+            if GENERATED_ID_RE.match(name):
+                self.pending_ids.add(name)
+                self.broadcast_to_admins(self.get_pending_logins_msg())
             return {"type": "error", "message": "No such player"}
-        player = self.players[name]
+        player = self.players[actual_name]
         await player.connected(ws)
         return player
 
@@ -958,6 +980,18 @@ async def ws_handler(
                     elif msg["type"] == "administer_debuff":
                         if error := manager.administer_debuff(msg):
                             await send(ws, error)
+                    elif msg["type"] == "assign_id":
+                        generated_id = msg["generated_id"]
+                        player_name = msg["player"]
+                        if player_name == "":
+                            manager.pending_ids.discard(generated_id)
+                            manager.broadcast_to_admins(manager.get_pending_logins_msg())
+                        elif player_name not in manager.players:
+                            await send(ws, {"type": "error", "message": "No such player"})
+                        else:
+                            manager.id_mapping[generated_id] = player_name
+                            manager.pending_ids.discard(generated_id)
+                            manager.broadcast_to_admins(manager.get_pending_logins_msg())
                     else:
                         await send(ws, {"type": "error", "message": "unknown admin action"})
 
@@ -994,9 +1028,10 @@ async def ws_handler(
                         admin_conn = AdminConnection(ws)
                         manager.admins[ws] = admin_conn
                         await send(ws, {"type": "admin_welcome"})
-                        # Send puzzle list and player list
+                        # Send puzzle list, player list, and pending logins
                         await send(ws, manager.get_puzzle_list())
                         await send(ws, manager.get_player_list())
+                        await send(ws, manager.get_pending_logins_msg())
                         # Send current submission state for all players
                         for name, sub in manager.submissions.items():
                             await send(

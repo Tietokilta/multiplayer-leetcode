@@ -340,7 +340,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
       key = reverseNavigationKeys[key] ?? key;
     }
 
-    const action = this.editor.act(port, key, state, !isMyTurn, this.hasDebuff(Debuff.caps_lock));
+    const action = this.editor.act(port, key, state, !isMyTurn, this.hasDebuff(Debuff.caps_lock), document.hasFocus());
 
     this.updateScreensaver(true);
 
@@ -439,8 +439,6 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
         });
         break;
       case "key": {
-        // Ignore events while window is not focused
-        if (!document.hasFocus()) break;
         // Key event
         let { port, state, key } = msg; // eslint-disable-line prefer-const
         key = key.slice(4); // remove "KEY_" prefix

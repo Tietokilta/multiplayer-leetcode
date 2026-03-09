@@ -4,24 +4,21 @@ import { useReadLocalStorage } from "usehooks-ts";
 type Props = {
   children: ReactNode;
   onConnect: (myId: string, serverIp: string) => void;
+  error: string | null;
 };
 
-const Login = ({ children, onConnect }: Props) => {
+const Login = ({ children, onConnect, error }: Props) => {
   const myId = useReadLocalStorage<string>("multiplayer-leetcode-my-id") ?? "";
   const [myIdInput, setMyIdInput] = useState(myId);
 
   const serverIp = useReadLocalStorage<string>("multiplayer-leetcode-server-ip") ?? "";
   const [serverIpInput, setServerIpInput] = useState(serverIp);
 
-  const serverIpError = useReadLocalStorage<string>("multiplayer-leetcode-server-ip-error") ?? "";
-
   return (
     <div className="m-4 border rounded p-4 flex flex-col gap-3">
       <div>Please set the team name and game server IP.</div>
-      {serverIpError && (
-        <div className="text-red-500">
-          Error connecting to server: "{serverIpError}" Please check the IP and try again.
-        </div>
+      {error && (
+        <div className="text-red-500">Error connecting to server: "{error}" Please check the IP and try again.</div>
       )}
       <div>
         <input

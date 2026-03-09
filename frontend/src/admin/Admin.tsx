@@ -6,6 +6,43 @@ import { PlayerCard } from "./PlayerCard";
 import type { SpectatorController } from "./SpectatorController";
 import { submissionColors } from "./submissionColors";
 
+function UnassignedLogin({
+  generatedId,
+  players,
+  onAssign,
+}: {
+  generatedId: string;
+  players: string[];
+  onAssign: (id: string, player: string) => void;
+}) {
+  const [selected, setSelected] = useState(players[0] ?? "");
+  return (
+    <div className="flex gap-2 items-center py-1">
+      <span className="font-mono text-sm flex-1">{generatedId}</span>
+      <select className="border rounded p-1" value={selected} onChange={(e) => setSelected(e.target.value)}>
+        {players.map((p) => (
+          <option key={p} value={p}>
+            {p}
+          </option>
+        ))}
+      </select>
+      <button
+        className="text-green-500 underline p-1 rounded cursor-pointer hover:bg-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={() => onAssign(generatedId, selected)}
+        disabled={!selected}
+      >
+        Assign
+      </button>
+      <button
+        className="text-gray-500 underline p-1 rounded cursor-pointer hover:bg-gray-500/25"
+        onClick={() => onAssign(generatedId, "")}
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
 function PlayerSpectateStatus({ controller }: { controller: SpectatorController }) {
   const submissionState = controller.usePlayerStore((s) => s.submissionState);
   return submissionState ? <span className={submissionColors[submissionState]}>({submissionState})</span> : null;
@@ -23,6 +60,8 @@ export default function Admin() {
     puzzles,
     currentPuzzle,
     players,
+    pendingLogins,
+    assignId,
     spectating,
     getController,
   } = state;
@@ -87,6 +126,15 @@ export default function Admin() {
       </div>
 
       {error && <div className="text-red-500 mb-4">{error}</div>}
+
+      {pendingLogins.length > 0 && (
+        <div className="border border-yellow-500 rounded p-4 mb-6">
+          <h2 className="font-bold mb-2">Unassigned logins ({pendingLogins.length})</h2>
+          {pendingLogins.map((id) => (
+            <UnassignedLogin key={id} generatedId={id} players={players} onAssign={assignId} />
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Puzzle Control */}

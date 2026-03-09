@@ -12,7 +12,8 @@ type AdminCmd =
   | { type: "change_puzzle"; puzzle: string }
   | { type: "add_player"; name: string }
   | { type: "remove_player"; name: string }
-  | { type: "reload_puzzles" };
+  | { type: "reload_puzzles" }
+  | { type: "assign_id"; generated_id: string; player: string };
 
 type AdminMessage =
   | { type: "admin_welcome" }
@@ -23,6 +24,7 @@ type AdminMessage =
   | { type: "spectate_output"; player: string; content: string }
   | { type: "spectate_debuffs"; player: string; debuffs: DebuffItem[] }
   | { type: "spectate_debuff_state"; player: string; name: string; payload: unknown }
+  | { type: "pending_logins"; ids: string[] }
   | { type: "error"; message: string };
 
 type Options = {
@@ -38,6 +40,7 @@ export function useAdminState({ spectateAll = false }: Options) {
   const [puzzles, setPuzzles] = useState<PuzzleInfo[]>([]);
   const [currentPuzzle, setCurrentPuzzle] = useState<string | null>(null);
   const [players, setPlayers] = useState<string[]>([]);
+  const [pendingLogins, setPendingLogins] = useState<string[]>([]);
   const [spectating, setSpectating] = useState<Set<string>>(() => (spectateAll ? new Set(["*"]) : new Set()));
 
   const spectators = useRef<Map<string, SpectatorController>>(new Map());
@@ -74,6 +77,9 @@ export function useAdminState({ spectateAll = false }: Options) {
         case "players":
           setPlayers(data.players);
           break;
+        case "pending_logins":
+          setPendingLogins(data.ids);
+          break;
         case "spectate_editor":
         case "spectate_state":
         case "spectate_output":
@@ -95,6 +101,10 @@ export function useAdminState({ spectateAll = false }: Options) {
     setConnState("not");
   };
 
+  const assignId = (generated_id: string, player: string) => {
+    server.send({ type: "assign_id", generated_id, player });
+  };
+
   // Send spectate command when selection changes
   useEffect(() => {
     if (loggedIn) {
@@ -113,6 +123,8 @@ export function useAdminState({ spectateAll = false }: Options) {
     puzzles,
     currentPuzzle,
     players,
+    pendingLogins,
+    assignId,
     spectating,
     setSpectating,
     getController,

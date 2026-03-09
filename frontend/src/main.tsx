@@ -13,7 +13,7 @@ if (window.name !== "spotlight") {
 
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
-      <Suspense fallback={<div className="m-4 border rounded p-4">Connecting to game server&hellip;</div>}>
+      <Suspense fallback={<div className="m-4 border rounded p-4">Loading app&hellip;</div>}>
         {isAdmin ? <Admin /> : isSpectate ? <Spectate /> : <App />}
       </Suspense>
     </StrictMode>,
