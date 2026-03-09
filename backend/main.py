@@ -509,6 +509,12 @@ class PlayerManager:
             (puzzle.id,),
         )
         existing_submissions = await cursor.fetchall()
+        # Persist current puzzle to DB
+        await self.db.execute(
+            "INSERT OR REPLACE INTO game_state (key, value) VALUES ('current_puzzle_id', ?)",
+            (puzzle.id,),
+        )
+        await self.db.commit()
         # Synchronously update state (no further awaits)
         self.current_puzzle = puzzle
         self.submissions.clear()
@@ -713,7 +719,7 @@ class PlayerManager:
 
         data = json.dumps(converted)
         for admin in self.admins.values():
-            if admin.is_spectating(player_name):
+            if converted["type"] == "spectate_state" or admin.is_spectating(player_name):
                 try:
                     # TODO: use queue tasks like with players
                     asyncio.create_task(admin.ws.send(data, True))
@@ -1135,13 +1141,22 @@ async def main():
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (player_name) REFERENCES players(name)
         );
+        CREATE TABLE IF NOT EXISTS game_state (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL
+        );
         """
     )
     await db.commit()
 
     player_manager = PlayerManager(db)
-    await player_manager.load_players()
     await player_manager.reload_puzzles()
+    cursor = await db.execute("SELECT value FROM game_state WHERE key = 'current_puzzle_id'")
+    row = await cursor.fetchone()
+    if row and row[0] in player_manager.puzzles:
+        log.info(f"Restoring current puzzle '{row[0]}' from DB")
+        await player_manager.switch_puzzle(row[0], reset_editors=False)
+    await player_manager.load_players()
     player_manager.reload_prompts()
 
     save_players = asyncio.create_task(save_players_periodically(player_manager, done))

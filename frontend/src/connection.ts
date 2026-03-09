@@ -62,8 +62,10 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
     this.socket.addEventListener("close", (event: CloseEvent) => {
       console.log("Game server connection closed:", event.code);
       // If disconnect() was already called, it has sent the changes and we can ignore the rest.
-      if (event.target !== this.socket) return;
-
+      if (event.target !== this.socket) {
+        console.log("Ignoring close event from stale socket");
+        return;
+      }
       const connectError = !event.wasClean && !this.hasOpened;
       if (connectError) {
         this.handleLoginError?.("Failed to connect to server");
@@ -71,15 +73,18 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
       if (this.loggedIn) {
         this.loggedIn = false;
         this.handleLogin?.(false);
-      } else {
+      } else if (!this.hasOpened) {
         // Disconnect, failed before login
         this.disconnect();
       }
       this.handleState?.("not");
-      // Reconnect if still mounted and was logged in
+      // Reconnect if still mounted
       if (event.target === this.socket) {
         this.socket = null;
-        if (this.active) this.timeout = window.setTimeout(() => this.connect(ip, loginCmd), 1000);
+        if (this.active) {
+          console.log("Attempting to reconnect to game server in 1000ms...");
+          this.timeout = window.setTimeout(() => this.connect(ip, loginCmd), 1000);
+        }
       }
     });
   }
