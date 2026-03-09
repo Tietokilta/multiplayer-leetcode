@@ -926,17 +926,8 @@ async def ws_handler(
                                     "col": p.col,
                                 },
                             )
-                            # Send submission state if exists
+                            # Send submission output if exists
                             if sub := manager.submissions.get(name):
-                                await send(
-                                    ws,
-                                    {
-                                        "type": "spectate_state",
-                                        "player": name,
-                                        "state": sub.status,
-                                        "error": sub.error,
-                                    },
-                                )
                                 await send(
                                     ws,
                                     {
@@ -1006,6 +997,17 @@ async def ws_handler(
                         # Send puzzle list and player list
                         await send(ws, manager.get_puzzle_list())
                         await send(ws, manager.get_player_list())
+                        # Send current submission state for all players
+                        for name, sub in manager.submissions.items():
+                            await send(
+                                ws,
+                                {
+                                    "type": "spectate_state",
+                                    "player": name,
+                                    "state": sub.status,
+                                    "error": sub.error,
+                                },
+                            )
                     else:
                         log.warning("Invalid admin password attempt")
                         await send(ws, {"type": "error", "message": "invalid admin password"})

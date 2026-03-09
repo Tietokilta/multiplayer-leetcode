@@ -2,7 +2,14 @@ import { useState } from "react";
 import { stateColors } from "../connection";
 import { useAdminState } from "./adminState";
 import { AdminLogin } from "./AdminLogin";
-import { PlayerCard, submissionColors } from "./PlayerCard";
+import { PlayerCard } from "./PlayerCard";
+import type { SpectatorController } from "./SpectatorController";
+import { submissionColors } from "./submissionColors";
+
+function PlayerSpectateStatus({ controller }: { controller: SpectatorController }) {
+  const submissionState = controller.usePlayerStore((s) => s.submissionState);
+  return submissionState ? <span className={submissionColors[submissionState]}>({submissionState})</span> : null;
+}
 
 export default function Admin() {
   const state = useAdminState({});
@@ -16,8 +23,8 @@ export default function Admin() {
     puzzles,
     currentPuzzle,
     players,
-    playerStates,
     spectating,
+    getController,
   } = state;
 
   const [newPlayerName, setNewPlayerName] = useState("");
@@ -158,9 +165,7 @@ export default function Admin() {
               <label key={name} className="flex items-center gap-2 py-1 cursor-pointer">
                 <input type="checkbox" checked={spectating.has(name)} onChange={() => toggleSpectate(name)} />
                 <span>{name}</span>
-                {playerStates[name]?.state && (
-                  <span className={submissionColors[playerStates[name].state!]}>({playerStates[name].state})</span>
-                )}
+                <PlayerSpectateStatus controller={getController(name)} />
               </label>
             ))}
           </div>
@@ -186,7 +191,7 @@ export default function Admin() {
       {/* Spectate Views */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Array.from(spectating).map((name) => (
-          <PlayerCard key={name} name={name} state={playerStates[name]} />
+          <PlayerCard key={name} name={name} controller={getController(name)} />
         ))}
       </div>
     </div>

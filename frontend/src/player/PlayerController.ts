@@ -26,27 +26,31 @@ export type ActiveDebuff = {
   endTime: number; // Date.now() + duration * 1000
 };
 
-export type PlayerState = {
-  connected: ConnState;
-  hasBeenConnected: boolean;
-
+export type BasePlayerState = {
   rendered?: ReactNode;
-  puzzle: PuzzleMessage | null;
   output: string;
   submissionState: StateMessage["state"] | null;
   submissionError: string | null;
+
+  debuffs: ActiveDebuff[];
+  activeDebuffNames: Set<Debuff>;
+
+  screensaverActive: boolean;
+  screensaverTimeout: number | null;
+};
+
+export type PlayerState = BasePlayerState & {
+  connected: ConnState;
+  hasBeenConnected: boolean;
+
+  puzzle: PuzzleMessage | null;
 
   keyboardConnected: ConnState;
   currentKeyboard: string | undefined;
   keyboardList: string[];
 
-  debuffs: ActiveDebuff[];
-  activeDebuffNames: Set<Debuff>;
   clippyEdited: boolean;
   clippyBlocked: number;
-
-  screensaverActive: boolean;
-  screensaverTimeout: number | null;
 };
 
 const example = `function twoSum(nums: number[], target: number): number[] {
@@ -61,7 +65,17 @@ const example = `function twoSum(nums: number[], target: number): number[] {
   return [];
 }`;
 
-function filterActive(debuffs: ActiveDebuff[]) {
+function debuffToActiveDebuff(debuff: DebuffItem, now: number): ActiveDebuff {
+  return {
+    name: debuff.name,
+    type: debuff.type,
+    strength: debuff.strength,
+    duration: debuff.duration * 1000,
+    endTime: now + debuff.duration * 1000,
+  };
+}
+
+function filterActiveDebuffs(debuffs: ActiveDebuff[]) {
   const seen = new Set<string>();
   return debuffs.filter((d) => {
     if (seen.has(d.type)) return false;
@@ -70,40 +84,90 @@ function filterActive(debuffs: ActiveDebuff[]) {
   });
 }
 
-export class PlayerController {
-  server = new GameServerHandler<PlayerCmd, PlayerMessage>();
-  keyboardServer = new KeyboardServerHandler();
+export abstract class AbstractPlayerController<State extends BasePlayerState = BasePlayerState> {
   editor = new EditorState(example);
-  turnTracker = new TurnTracker(this);
-
   autoCycleLastTick = 0;
 
   /** Immutable state store, updated from mutable state. */
-  usePlayerStore = create<PlayerState>()(() => ({
-    connected: "not",
-    hasBeenConnected: false,
+  usePlayerStore = create<State>()(() => this.createState());
+  outputRef = createRef<HTMLPreElement>();
 
-    rendered: this.editor.render(new Set()), // Initial render without debuffs
-    puzzle: null,
-    output: "",
-    submissionState: null,
-    submissionError: null,
+  protected abstract createState(): State;
 
-    keyboardConnected: "not",
-    currentKeyboard: undefined,
-    keyboardList: [],
+  protected abstract update(
+    slice: Partial<State | BasePlayerState> | ((state: State) => Partial<State | BasePlayerState>),
+  ): void;
 
-    debuffs: [],
-    activeDebuffNames: new Set(),
-    clippyEdited: false,
-    clippyBlocked: 0,
+  hasDebuff(...name: Debuff[]) {
+    const { activeDebuffNames } = this.usePlayerStore.getState();
+    return name.some((n) => activeDebuffNames.has(n));
+  }
 
-    screensaverActive: false,
-    screensaverTimeout: null,
-  }));
+  findDebuff(name: Debuff): ActiveDebuff | undefined {
+    const { activeDebuffNames, debuffs } = this.usePlayerStore.getState();
+    if (!activeDebuffNames.has(name)) return undefined;
+    return debuffs.find((d) => d.name === name);
+  }
+
+  protected debuffStarted(started: ActiveDebuff): void;
+  protected debuffStarted() {}
+
+  protected debuffEnded(ended: ActiveDebuff): void;
+  protected debuffEnded() {}
+
+  protected updateDebuffs(newDebuffs: DebuffItem[] | false) {
+    const now = Date.now();
+    const { debuffs: debuffsBefore } = this.usePlayerStore.getState();
+    const activeBefore = filterActiveDebuffs(debuffsBefore);
+
+    const debuffsAfter: ActiveDebuff[] =
+      newDebuffs === false
+        ? []
+        : [
+            ...debuffsBefore.filter((d) => d.endTime > now),
+            ...newDebuffs.map((d) => debuffToActiveDebuff(d, now)),
+          ].sort((a, b) => a.endTime - b.endTime);
+    const activeAfter = filterActiveDebuffs(debuffsAfter);
+
+    for (const ended of activeBefore) {
+      if (!activeAfter.includes(ended)) {
+        console.log("Debuff ended:", ended.name);
+        this.debuffEnded(ended);
+      }
+    }
+    for (const started of activeAfter) {
+      if (!activeBefore.includes(started)) {
+        console.log("Debuff started:", started.name);
+        this.debuffStarted(started);
+      }
+    }
+
+    this.update({ debuffs: debuffsAfter, activeDebuffNames: new Set(activeAfter.map((d) => d.name)) });
+
+    if (debuffsAfter.length > 0) {
+      setTimeout(() => this.tick(), debuffsAfter[0].endTime - now);
+    }
+  }
+
+  tick() {
+    this.updateDebuffs([]);
+  }
+
+  rerender() {
+    const { activeDebuffNames } = this.usePlayerStore.getState();
+    this.update({ rendered: this.editor.render(activeDebuffNames) });
+  }
+}
+
+export class PlayerController extends AbstractPlayerController<PlayerState> {
+  server = new GameServerHandler<PlayerCmd, PlayerMessage>();
+  keyboardServer = new KeyboardServerHandler();
+  turnTracker = new TurnTracker(this);
+  autoCycleLastTick = 0;
   outputRef = createRef<HTMLPreElement>();
 
   constructor() {
+    super();
     this.server.handleState = (state) => this.update({ connected: state });
     this.server.handleLogin = (success: boolean) => success && this.update({ hasBeenConnected: true });
     this.server.handleMessage = (data) => this.handleMessage(data);
@@ -111,13 +175,33 @@ export class PlayerController {
     this.keyboardServer.handleMessage = (msg) => this.handleKeyboardMessage(msg);
   }
 
-  private update(slice: Partial<PlayerState> | ((state: PlayerState) => Partial<PlayerState>)) {
-    this.usePlayerStore.setState(slice);
+  protected createState(): PlayerState {
+    return {
+      connected: "not",
+      hasBeenConnected: false,
+
+      rendered: this.editor.render(new Set()), // Initial render without debuffs
+      puzzle: null,
+      output: "",
+      submissionState: null,
+      submissionError: null,
+
+      keyboardConnected: "not",
+      currentKeyboard: undefined,
+      keyboardList: [],
+
+      debuffs: [],
+      activeDebuffNames: new Set(),
+      clippyEdited: false,
+      clippyBlocked: 0,
+
+      screensaverActive: false,
+      screensaverTimeout: null,
+    };
   }
 
-  rerender() {
-    const { activeDebuffNames } = this.usePlayerStore.getState();
-    this.update({ rendered: this.editor.render(activeDebuffNames) });
+  protected update(slice: Partial<PlayerState> | ((state: PlayerState) => Partial<PlayerState>)) {
+    this.usePlayerStore.setState(slice);
   }
 
   private updateScreensaver(bump: boolean) {
@@ -145,27 +229,29 @@ export class PlayerController {
     }
   }
 
-  hasDebuff(...name: Debuff[]) {
-    const { activeDebuffNames } = this.usePlayerStore.getState();
-    return name.some((n) => activeDebuffNames.has(n));
-  }
-
-  findDebuff(name: Debuff): ActiveDebuff | undefined {
-    const { activeDebuffNames, debuffs } = this.usePlayerStore.getState();
-    if (!activeDebuffNames.has(name)) return undefined;
-    return debuffs.find((d) => d.name === name);
+  protected debuffStarted(started: ActiveDebuff): void {
+    if (clippyDebuffs.includes(started.name)) {
+      this.update({ clippyEdited: false, clippyBlocked: 0 });
+    }
+    if (started.name === Debuff.keyboard_cat) {
+      // Allow some time for the video to start, then start injecting random keys
+      setTimeout(() => this.injectRandomKey(), 1500);
+    }
+    if (started.name === Debuff.waves) {
+      document.body.style.setProperty("--wave-strength", `${started.strength}px`);
+    }
+    if (started.name === Debuff.nausea) {
+      document.documentElement.style.setProperty("--nausea-strength", `${1 - started.strength / 10}`);
+    }
   }
 
   tick() {
-    const now = Date.now();
-    const remaining = this.updateDebuffs([]);
-    if (remaining.length > 0) {
-      setTimeout(() => this.tick(), remaining[0].endTime - now);
-    }
-    this.updateScreensaver(false);
+    super.tick();
 
+    this.updateScreensaver(false);
     let debuff;
     if ((debuff = this.findDebuff(Debuff.auto_cycle))) {
+      const now = Date.now();
       const minDelay = 10000 / debuff.strength; // strength is cycles per 10s
       if (this.autoCycleLastTick + minDelay < now) {
         this.autoCycleLastTick = now;
@@ -176,54 +262,6 @@ export class PlayerController {
         });
       }
     }
-  }
-
-  private updateDebuffs(newDebuffs: DebuffItem[] | false) {
-    const now = Date.now();
-    const { debuffs: debuffsBefore } = this.usePlayerStore.getState();
-    const activeBefore = filterActive(debuffsBefore);
-
-    const debuffsAfter =
-      newDebuffs === false
-        ? []
-        : [
-            ...debuffsBefore.filter((d) => d.endTime > now),
-            ...newDebuffs.map((d) => ({
-              name: d.name,
-              type: d.type,
-              strength: d.strength,
-              duration: d.duration * 1000,
-              endTime: now + d.duration * 1000,
-            })),
-          ].sort((a, b) => a.endTime - b.endTime);
-    const activeAfter = filterActive(debuffsAfter);
-
-    for (const ended of activeBefore) {
-      if (!activeAfter.includes(ended)) {
-        console.log("Debuff ended:", ended.name);
-      }
-    }
-    for (const started of activeAfter) {
-      if (!activeBefore.includes(started)) {
-        console.log("Debuff started:", started.name);
-        if (clippyDebuffs.includes(started.name)) {
-          this.update({ clippyEdited: false, clippyBlocked: 0 });
-        }
-        if (started.name === Debuff.keyboard_cat) {
-          // Allow some time for the video to start, then start injecting random keys
-          setTimeout(() => this.injectRandomKey(), 1500);
-        }
-        if (started.name === Debuff.waves) {
-          document.body.style.setProperty("--wave-strength", `${started.strength}px`);
-        }
-        if (started.name === Debuff.nausea) {
-          document.documentElement.style.setProperty("--nausea-strength", `${1 - started.strength / 10}`);
-        }
-      }
-    }
-
-    this.update({ debuffs: debuffsAfter, activeDebuffNames: new Set(activeAfter.map((d) => d.name)) });
-    return debuffsAfter;
   }
 
   handleMessage(data: PlayerMessage) {
@@ -254,18 +292,13 @@ export class PlayerController {
         break;
       case "debuffs": {
         if (data.debuffs.length === 0) {
-          this.updateDebuffs([]);
-          this.update({ debuffs: [], activeDebuffNames: new Set() });
+          this.updateDebuffs(false);
           this.rerender();
           break;
         }
-        const now = Date.now();
-        const newDebuffs = this.updateDebuffs(data.debuffs);
+        this.updateDebuffs(data.debuffs);
         this.rerender();
         this.updateScreensaver(false);
-        if (newDebuffs.length > 0) {
-          setTimeout(() => this.tick(), newDebuffs[0].endTime - now);
-        }
         break;
       }
       case "error":

@@ -1,21 +1,35 @@
 import { useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { createPortal } from "react-dom";
 import { stateColors } from "../connection";
 import { AdminLogin } from "./AdminLogin";
 import { useAdminState } from "./adminState";
-import { PlayerCard, submissionColors, type PlayerState } from "./PlayerCard";
+import { PlayerCard } from "./PlayerCard";
+import type { SpectatorController } from "./SpectatorController";
+import { submissionColors } from "./submissionColors";
 
-function SpotlightView({ name, state }: { name: string; state: PlayerState | undefined }) {
+function SpotlightView({ name, controller }: { name: string; controller: SpectatorController }) {
+  const state = controller.usePlayerStore(
+    useShallow((s) => ({
+      submissionState: s.submissionState,
+      rendered: s.rendered,
+      output: s.output,
+      debuffs: s.debuffs,
+    })),
+  );
+
   return (
     <div className="flex flex-col h-screen p-4 bg-gray-950 text-gray-100">
       <div className="flex justify-between items-center mb-2 shrink-0">
         <span className="text-2xl font-bold">{name}</span>
-        {state?.state && <span className={`text-lg ${submissionColors[state.state]}`}>{state.state}</span>}
+        {state.submissionState && (
+          <span className={`text-lg ${submissionColors[state.submissionState]}`}>{state.submissionState}</span>
+        )}
       </div>
-      <pre className="bg-gray-900 text-gray-100 p-3 rounded text-sm font-mono whitespace-pre overflow-auto flex-1 min-h-0">
-        {state?.code ?? ""}
-      </pre>
-      {state?.output && (
+      <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm overflow-auto flex-1 min-h-0 mlc--editor">
+        {state.rendered}
+      </div>
+      {state.output && (
         <div className="mt-2 shrink-0">
           <div className="text-xs text-gray-500 mb-1">Output:</div>
           <pre className="bg-gray-800 text-gray-100 p-2 rounded text-sm font-mono overflow-auto max-h-32">
@@ -23,7 +37,7 @@ function SpotlightView({ name, state }: { name: string; state: PlayerState | und
           </pre>
         </div>
       )}
-      {state?.debuffs && state.debuffs.length > 0 && (
+      {state.debuffs.length > 0 && (
         <div className="mt-2 shrink-0">
           <div className="text-xs text-gray-500 mb-1">Penalties:</div>
           <div className="flex flex-wrap gap-1">
@@ -41,7 +55,7 @@ function SpotlightView({ name, state }: { name: string; state: PlayerState | und
 
 export default function Spectate() {
   const adminState = useAdminState({ spectateAll: true });
-  const { connState, loggedIn, players, playerStates } = adminState;
+  const { connState, loggedIn, players, getController } = adminState;
 
   // 10 fixed slots: indices 0-8 = grid, index 9 = spotlight. null = empty.
   const [orderedPlayers, setOrderedPlayers] = useState<(string | null)[]>(Array(10).fill(null));
@@ -112,16 +126,25 @@ export default function Spectate() {
       <div className="grid grid-cols-3 grid-rows-3 p-3 gap-3 h-screen">
         {gridSlots.map((player, i) =>
           player ? (
-            <PlayerCard key={player} name={player} state={playerStates[player]} onClick={() => handleGridClick(i)} />
+            <PlayerCard
+              key={player}
+              name={player}
+              controller={getController(player)}
+              onClick={() => handleGridClick(i)}
+            />
           ) : (
-            <div key={i} className="border border-dashed rounded opacity-30" />
+            <div
+              key={i}
+              className="border border-dashed rounded opacity-30 cursor-pointer hover:border-blue-400 transition-colors"
+              onClick={() => handleGridClick(i)}
+            />
           ),
         )}
       </div>
       {spotlightContainer &&
         spotlightPlayer &&
         createPortal(
-          <SpotlightView name={spotlightPlayer} state={playerStates[spotlightPlayer]} />,
+          <SpotlightView name={spotlightPlayer} controller={getController(spotlightPlayer)} />,
           spotlightContainer,
         )}
     </>

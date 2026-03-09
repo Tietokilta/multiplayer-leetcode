@@ -58,6 +58,12 @@
   initial-value: black;
 }
 
+@property --code-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
 @property --code-color {
   syntax: "<color>";
   inherits: true;
@@ -66,14 +72,17 @@
 
 .mlc--editor {
   --code-color: var(--color-gray-100);
+  --code-bg: transparent;
 }
 
 .mlc--line span {
   --cursor-bg: var(--code-color);
   --cursor-color: black;
+  background-color: var(--code-bg) !important;
+  color: var(--code-color) !important;
 }
 
-.mlc--cursor {
+.mlc--line span.mlc--cursor {
   background-color: var(--cursor-bg) !important;
   color: var(--cursor-color) !important;
 }
@@ -156,6 +165,7 @@
   animation:
     sl-x 9s ease-in-out infinite,
     sl-y 7s ease-in-out infinite;
+  pointer-events: none;
 }
 
 @keyframes sl-x {
@@ -197,23 +207,23 @@
   }
 }
 
-html.debuff-flip_horizontal .mlc--editor {
+.debuff-flip_horizontal .mlc--editor {
   scale: -1 1;
 }
 
-html.debuff-flip_vertical .mlc--editor {
+.debuff-flip_vertical .mlc--editor {
   scale: 1 -1;
 }
 
-html.debuff-nausea .mlc--puzzle {
+.debuff-nausea .mlc--puzzle {
   animation: nausea 5s infinite linear;
 }
-html.debuff-nausea .mlc--editor {
+.debuff-nausea .mlc--editor {
   animation: nausea 5s infinite linear;
   animation-delay: -1.3s;
   animation-direction: reverse;
 }
-html.debuff-nausea .mlc--output {
+.debuff-nausea .mlc--output {
   animation: nausea 5s infinite linear;
   animation-delay: -2.7s;
 }
@@ -233,104 +243,104 @@ html.debuff-nausea .mlc--output {
   }
 }
 
-html.debuff-shake .mlc--puzzle {
+.debuff-shake .mlc--puzzle {
   animation: shake 2s infinite;
 }
-html.debuff-shake .mlc--editor {
+.debuff-shake .mlc--editor {
   animation: shake 2s infinite;
 }
-html.debuff-shake .mlc--output {
+.debuff-shake .mlc--output {
   animation: shake 2s infinite;
 }
 
 @import "./generated/shake.css";
 
-html.debuff-invisible_cursor .mlc--cursor {
+.debuff-invisible_cursor .mlc--cursor {
   --cursor-bg: transparent;
   --cursor-color: var(--code-color);
 }
 
-html:not(.debuff-invisible_cursor).debuff-cursor_blink .mlc--cursor {
+:not(.debuff-invisible_cursor).debuff-cursor_blink .mlc--cursor {
   animation: cursor-blink 24s step-end infinite;
 }
 
 @import "./generated/blink.css";
 
-html.debuff-fog_of_war .mlc--far > *,
-html.debuff-fog_of_war .mlc--far-char {
-  color: gray;
-  background-color: gray;
-}
-
-html.debuff-funky_fonts .mlc--editor {
+.debuff-funky_fonts .mlc--editor {
   font-size: 1.25em;
 }
-html.debuff-funky_fonts [data-font="0"] {
+.debuff-funky_fonts [data-font="0"] {
   font-family: "Comic Neue", cursive;
 }
-html.debuff-funky_fonts [data-font="1"] {
+.debuff-funky_fonts [data-font="1"] {
   font-family: "Anton", sans-serif;
 }
-html.debuff-funky_fonts [data-font="2"] {
+.debuff-funky_fonts [data-font="2"] {
   font-family: "Pirata One", cursive;
 }
-html.debuff-funky_fonts [data-font="3"] {
+.debuff-funky_fonts [data-font="3"] {
   font-family: "Lobster", cursive;
 }
-html.debuff-funky_fonts [data-font="4"] {
+.debuff-funky_fonts [data-font="4"] {
   font-family: "Abril Fatface", serif;
 }
-html.debuff-funky_fonts [data-font="5"] {
+.debuff-funky_fonts [data-font="5"] {
   font-family: "Permanent Marker", cursive;
 }
-html.debuff-funky_fonts [data-font="6"] {
+.debuff-funky_fonts [data-font="6"] {
   font-family: "Boogaloo", sans-serif;
 }
 
 /* disco_mode: backgrounds at oklch L=0.40 (dark), foregrounds at L=0.90 (light),
    hues evenly spaced 36° apart, foreground is complementary (+180°) */
-html.debuff-disco_mode [data-disco="0"] {
-  background-color: oklch(0.4 0.25 0);
-  color: oklch(0.9 0.2 180);
+.debuff-disco_mode [data-disco="0"] {
+  --code-bg: oklch(0.4 0.25 0);
+  --code-color: oklch(0.9 0.2 180);
 }
-html.debuff-disco_mode [data-disco="1"] {
-  background-color: oklch(0.4 0.25 36);
-  color: oklch(0.9 0.2 216);
+.debuff-disco_mode [data-disco="1"] {
+  --code-bg: oklch(0.4 0.25 36);
+  --code-color: oklch(0.9 0.2 216);
 }
-html.debuff-disco_mode [data-disco="2"] {
-  background-color: oklch(0.4 0.25 72);
-  color: oklch(0.9 0.2 252);
+.debuff-disco_mode [data-disco="2"] {
+  --code-bg: oklch(0.4 0.25 72);
+  --code-color: oklch(0.9 0.2 252);
 }
-html.debuff-disco_mode [data-disco="3"] {
-  background-color: oklch(0.4 0.25 108);
-  color: oklch(0.9 0.2 288);
+.debuff-disco_mode [data-disco="3"] {
+  --code-bg: oklch(0.4 0.25 108);
+  --code-color: oklch(0.9 0.2 288);
 }
-html.debuff-disco_mode [data-disco="4"] {
-  background-color: oklch(0.4 0.25 144);
-  color: oklch(0.9 0.2 324);
+.debuff-disco_mode [data-disco="4"] {
+  --code-bg: oklch(0.4 0.25 144);
+  --code-color: oklch(0.9 0.2 324);
 }
-html.debuff-disco_mode [data-disco="5"] {
-  background-color: oklch(0.4 0.25 180);
-  color: oklch(0.9 0.2 0);
+.debuff-disco_mode [data-disco="5"] {
+  --code-bg: oklch(0.4 0.25 180);
+  --code-color: oklch(0.9 0.2 0);
 }
-html.debuff-disco_mode [data-disco="6"] {
-  background-color: oklch(0.4 0.25 216);
-  color: oklch(0.9 0.2 36);
+.debuff-disco_mode [data-disco="6"] {
+  --code-bg: oklch(0.4 0.25 216);
+  --code-color: oklch(0.9 0.2 36);
 }
-html.debuff-disco_mode [data-disco="7"] {
-  background-color: oklch(0.4 0.25 252);
-  color: oklch(0.9 0.2 72);
+.debuff-disco_mode [data-disco="7"] {
+  --code-bg: oklch(0.4 0.25 252);
+  --code-color: oklch(0.9 0.2 72);
 }
-html.debuff-disco_mode [data-disco="8"] {
-  background-color: oklch(0.4 0.25 288);
-  color: oklch(0.9 0.2 108);
+.debuff-disco_mode [data-disco="8"] {
+  --code-bg: oklch(0.4 0.25 288);
+  --code-color: oklch(0.9 0.2 108);
 }
-html.debuff-disco_mode [data-disco="9"] {
-  background-color: oklch(0.4 0.25 324);
-  color: oklch(0.9 0.2 144);
+.debuff-disco_mode [data-disco="9"] {
+  --code-bg: oklch(0.4 0.25 324);
+  --code-color: oklch(0.9 0.2 144);
 }
 
-html.debuff-squiggles .mlc--squiggle {
+.debuff-fog_of_war .mlc--far span,
+.debuff-fog_of_war .mlc--far-char {
+  --code-color: gray;
+  --code-bg: gray;
+}
+
+.debuff-squiggles .mlc--squiggle {
   text-decoration: underline wavy red;
   text-decoration-skip-ink: none;
 }
@@ -356,16 +366,19 @@ html.debuff-squiggles .mlc--squiggle {
   }
 }
 
-html.debuff-waves body {
+/* Ensure this is on an element that doesn't get other debuff animations! */
+/* This is lazy but eh :D */
+html.debuff-waves body,
+.debuff-waves.mlc--player-card {
   animation: wave-phase 2s linear infinite;
 }
 
-html.debuff-waves .mlc--editor span {
+.debuff-waves .mlc--editor span {
   display: inline-block;
   transform: translateY(calc(sin(var(--wave-phase) + var(--wave-offset, 0deg)) * var(--wave-strength)));
 }
 
-html.debuff-hyperfocus .mlc--editor span {
+.debuff-hyperfocus .mlc--editor span {
   display: inline-block;
   line-height: 1;
 }

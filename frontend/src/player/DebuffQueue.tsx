@@ -2,7 +2,7 @@ import { createRef, useRef, useState, type RefObject } from "react";
 import { CSSTransition, TransitionGroup } from "react-transition-group";
 import { useInterval } from "usehooks-ts";
 import { debuffInfo, type Debuff } from "../debuffs";
-import type { PlayerController } from "./PlayerController";
+import type { AbstractPlayerController } from "./PlayerController";
 
 function formatDuration(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -11,7 +11,7 @@ function formatDuration(ms: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export function DebuffQueue({ controller }: { controller: PlayerController }) {
+export function DebuffQueue({ controller, minimal }: { controller: AbstractPlayerController; minimal?: boolean }) {
   const [, setTick] = useState(0);
   useInterval(() => setTick((t) => t + 1), 1000);
 
@@ -29,7 +29,7 @@ export function DebuffQueue({ controller }: { controller: PlayerController }) {
   }
 
   return (
-    <div className="flex gap-2 pointer-events-none -mr-4 overflow-hidden relative z-100">
+    <div className={`flex ${minimal ? "gap-1" : "gap-2"} pointer-events-none -mr-4 overflow-hidden relative z-100`}>
       <TransitionGroup component={null}>
         {debuffs.map((debuff) => {
           const key = `${debuff.name}-${debuff.endTime}`;
@@ -38,9 +38,23 @@ export function DebuffQueue({ controller }: { controller: PlayerController }) {
           return (
             <CSSTransition key={key} nodeRef={nodeRef} timeout={300} classNames="debuff-item">
               <div ref={nodeRef} className="debuff-item-wrapper">
-                <div className="debuff-inner border rounded p-3 bg-red-800 text-white leading-6 whitespace-nowrap flex items-center gap-3">
+                <div
+                  className={`
+                    debuff-inner
+                    border
+                    rounded
+                    bg-red-800
+                    text-white
+                    whitespace-nowrap
+                    flex
+                    items-baseline
+                    ${minimal ? "text-xs px-2 py-1 gap-2" : "p-3 gap-3"}
+                    `}
+                >
                   <span className="font-bold">{info?.title ?? debuff.name}</span>
-                  <span className="text-white text-lg font-mono">{formatDuration(debuff.endTime - now)}</span>
+                  <span className={`text-white ${minimal ? "" : "text-lg"} font-mono`}>
+                    {formatDuration(debuff.endTime - now)}
+                  </span>
                 </div>
               </div>
             </CSSTransition>
