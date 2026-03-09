@@ -135,17 +135,14 @@ export class EditorState {
             return (
               <span
                 key={j}
-                className={
-                  isCursorChar
-                    ? "mlc--cursor"
-                    : [
-                        farFromCursorChar && "mlc--far-char",
-                        tokenType && `token ${tokenType}`,
-                        squiggleChars?.[j] && "mlc--squiggle",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")
-                }
+                className={[
+                  isCursorChar && "mlc--cursor",
+                  farFromCursorChar && "mlc--far-char",
+                  tokenType && `token ${tokenType}`,
+                  squiggleChars?.[j] && "mlc--squiggle",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 data-font={funkyFonts ? ((i * 31 + j * 37 + i * j) >>> 0) % 7 : undefined}
                 data-disco={discoMode ? ((i * 53 + j * 29 + i * j * 3) >>> 0) % 10 : undefined}
                 style={

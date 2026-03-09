@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "prismjs/themes/prism-okaidia.css";
+@import "./prism.css";
 
 @font-face {
   font-family: "Comic Neue";
@@ -46,9 +46,36 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@property --cursor-bg {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: white;
+}
+
+@property --cursor-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: black;
+}
+
+@property --code-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: white;
+}
+
+.mlc--editor {
+  --code-color: var(--color-gray-100);
+}
+
+.mlc--line span {
+  --cursor-bg: var(--code-color);
+  --cursor-color: black;
+}
+
 .mlc--cursor {
-  background-color: white !important;
-  color: black !important;
+  background-color: var(--cursor-bg) !important;
+  color: var(--cursor-color) !important;
 }
 
 /* Debuff queue enter/exit animation */
@@ -218,7 +245,12 @@ html.debuff-shake .mlc--output {
 
 @import "./generated/shake.css";
 
-html.debuff-cursor_blink .mlc--cursor {
+html.debuff-invisible_cursor .mlc--cursor {
+  --cursor-bg: transparent;
+  --cursor-color: var(--code-color);
+}
+
+html:not(.debuff-invisible_cursor).debuff-cursor_blink .mlc--cursor {
   animation: cursor-blink 24s step-end infinite;
 }
 
@@ -230,11 +262,9 @@ html.debuff-fog_of_war .mlc--far-char {
   background-color: gray;
 }
 
-html.debuff-invisible_cursor .mlc--cursor {
-  background-color: unset !important;
-  color: unset !important;
+html.debuff-funky_fonts .mlc--editor {
+  font-size: 1.25em;
 }
-
 html.debuff-funky_fonts [data-font="0"] {
   font-family: "Comic Neue", cursive;
 }

@@ -47,8 +47,8 @@
   94.830%,
   95.885%,
   96.939% {
-    background-color: white;
-    color: black;
+    --cursor-bg: var(--code-color);
+    --cursor-color: black;
   }
   5.147%,
   10.794%,
@@ -97,7 +97,7 @@
   94.423%,
   95.477%,
   96.532% {
-    background-color: unset;
-    color: unset;
+    --cursor-bg: transparent;
+    --cursor-color: var(--code-color);
   }
 }

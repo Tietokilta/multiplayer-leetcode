@@ -64,8 +64,8 @@ const example = `function twoSum(nums: number[], target: number): number[] {
 function filterActive(debuffs: ActiveDebuff[]) {
   const seen = new Set<string>();
   return debuffs.filter((d) => {
-    if (seen.has(d.name)) return false;
-    seen.add(d.name);
+    if (seen.has(d.type)) return false;
+    seen.add(d.type);
     return true;
   });
 }
@@ -121,19 +121,26 @@ export class PlayerController {
   }
 
   private updateScreensaver(bump: boolean) {
-    const { screensaverTimeout } = this.usePlayerStore.getState();
+    const { screensaverTimeout, screensaverActive } = this.usePlayerStore.getState();
     const debuff = this.findDebuff(Debuff.screensaver);
     if (screensaverTimeout && (!debuff || bump)) {
       clearTimeout(screensaverTimeout);
     }
     if (!debuff) {
+      if (screensaverActive)
+        this.server.send({ type: "debuff_state", name: "screensaver", payload: { kind: "inactive" } });
       this.update({ screensaverActive: false, screensaverTimeout: null });
       return;
     } else if (bump || !screensaverTimeout) {
+      if (screensaverActive)
+        this.server.send({ type: "debuff_state", name: "screensaver", payload: { kind: "inactive" } });
       const delay = 10000 - debuff.strength; // strength is ms of inactivity before screensaver
       this.update({
         screensaverActive: false,
-        screensaverTimeout: setTimeout(() => this.update({ screensaverActive: true }), delay),
+        screensaverTimeout: setTimeout(() => {
+          this.update({ screensaverActive: true });
+          this.server.send({ type: "debuff_state", name: "screensaver", payload: { kind: "active" } });
+        }, delay),
       });
     }
   }

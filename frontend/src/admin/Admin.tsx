@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { type ConnState, stateColors, GameServerHandler } from "../connection";
 import { useLocalStorage } from "usehooks-ts";
+import type { AngryBirdInitPayload, AngryBirdPosPayload } from "../player/AngryBird";
 
 type PuzzleInfo = { id: string; title: string };
 
@@ -22,6 +23,7 @@ type AdminMessage =
   | { type: "spectate_state"; player: string; state: "running" | "valid" | "invalid" | null }
   | { type: "spectate_output"; player: string; content: string }
   | { type: "spectate_debuffs"; player: string; debuffs: DebuffItem[] }
+  | { type: "spectate_debuff_state"; player: string; name: string; payload: unknown }
   | { type: "error"; message: string };
 
 type PlayerState = {
@@ -31,6 +33,9 @@ type PlayerState = {
   state: "running" | "valid" | "invalid" | null;
   output: string;
   debuffs: DebuffItem[];
+  screensaverActive: boolean;
+  birdInit: AngryBirdInitPayload | null;
+  birdPos: AngryBirdPosPayload | null;
 };
 
 const defaultPlayerState: PlayerState = {
@@ -40,6 +45,9 @@ const defaultPlayerState: PlayerState = {
   state: null,
   output: "",
   debuffs: [],
+  screensaverActive: false,
+  birdInit: null,
+  birdPos: null,
 };
 
 const submissionColors = {
@@ -130,6 +138,30 @@ export default function Admin() {
             },
           }));
           break;
+        case "spectate_debuff_state": {
+          const payload = data.payload as Record<string, unknown>;
+          if (data.name === "screensaver") {
+            setPlayerStates((prev) => ({
+              ...prev,
+              [data.player]: {
+                ...defaultPlayerState,
+                ...prev[data.player],
+                screensaverActive: payload.kind === "active",
+              },
+            }));
+          } else if (data.name === "angry_bird") {
+            setPlayerStates((prev) => ({
+              ...prev,
+              [data.player]: {
+                ...defaultPlayerState,
+                ...prev[data.player],
+                ...(payload.kind === "init" ? { birdInit: payload as unknown as AngryBirdInitPayload } : {}),
+                birdPos: payload.kind === "pos" ? (payload as unknown as AngryBirdPosPayload) : prev[data.player]?.birdPos ?? null,
+              },
+            }));
+          }
+          break;
+        }
       }
     };
 
