@@ -27,6 +27,7 @@ export type ActiveDebuff = {
 };
 
 export type BasePlayerState = {
+  puzzle: Omit<PuzzleMessage, "type"> | null;
   rendered?: ReactNode;
   output: string;
   submissionState: StateMessage["state"] | null;
@@ -37,20 +38,17 @@ export type BasePlayerState = {
 
   screensaverActive: boolean;
   screensaverTimeout: number | null;
+  clippyEdited: boolean;
+  clippyBlocked: number;
 };
 
 export type PlayerState = BasePlayerState & {
   connected: ConnState;
   hasBeenConnected: boolean;
 
-  puzzle: PuzzleMessage | null;
-
   keyboardConnected: ConnState;
   currentKeyboard: string | undefined;
   keyboardList: string[];
-
-  clippyEdited: boolean;
-  clippyBlocked: number;
 };
 
 const example = `function twoSum(nums: number[], target: number): number[] {

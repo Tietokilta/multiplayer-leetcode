@@ -2,12 +2,14 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 
-if (window.name !== "spotlight") {
+const { pathname } = window.location;
+if (pathname === "/spotlight") {
+  window.opener?.postMessage({ type: "spotlight-ready" }, location.origin);
+} else {
   const Admin = lazy(() => import("./admin/Admin.tsx"));
   const App = lazy(() => import("./player/App.tsx"));
   const Spectate = lazy(() => import("./admin/Spectate.tsx"));
 
-  const { pathname } = window.location;
   const isAdmin = pathname === "/admin";
   const isSpectate = pathname === "/spectate";
 

@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useInterval, useLocalStorage } from "usehooks-ts";
 import { stateColors } from "../connection";
-import { AngryBird } from "./AngryBird";
 import { useClippyPreload } from "./clippyData";
-import { DebuffQueue } from "./DebuffQueue";
 import { DebuffSelector } from "./DebuffSelector";
 import { RenderedEditor } from "./Editor";
-import Game, { LightsOut, Screensaver, SubwaySurfers } from "./Game";
+import Game from "./Game";
 import LocalKeyboard from "./LocalKeyboard";
 import Login from "./Login";
 import { PlayerController } from "./PlayerController";
@@ -242,20 +240,14 @@ function App() {
   }
 
   return (
-    <div className="flex">
+    <>
       {connState}
       {localKeyboard}
-      <div className="flex-1 relative flex flex-col p-4 gap-4 h-screen">
+      <Game controller={controller} outputRef={outputRef}>
         {showKeyboards && <KeyboardList controller={controller} />}
         {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
-        <Game outputRef={outputRef} controller={controller} />
-        <DebuffQueue controller={controller} />
-      </div>
-      <SubwaySurfers controller={controller} />
-      <Screensaver controller={controller} />
-      <LightsOut controller={controller} />
-      <AngryBird controller={controller} />
-    </div>
+      </Game>
+    </>
   );
 }
 

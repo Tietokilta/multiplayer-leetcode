@@ -131,6 +131,7 @@ class PuzzleListItem(TypedDict):
 
     id: str
     title: str
+    description: str
 
 
 class PuzzleListMessage(TypedDict):
@@ -539,6 +540,7 @@ class PlayerManager:
         await self.db.commit()
         # Synchronously update state (no further awaits)
         self.current_puzzle = puzzle
+        self.broadcast_to_admins(self.get_puzzle_list())
         self.submissions.clear()
         for row in existing_submissions:
             if row[0] in self.players:
@@ -678,7 +680,7 @@ class PlayerManager:
         """Returns the list of available puzzles for admin."""
         return {
             "type": "puzzles",
-            "puzzles": [{"id": p.id, "title": p.title} for p in self.puzzles.values()],
+            "puzzles": [{"id": p.id, "title": p.title, "description": p.description} for p in self.puzzles.values()],
             "current": self.current_puzzle.id if self.current_puzzle else None,
         }
 
@@ -965,9 +967,6 @@ async def ws_handler(
                         log.info(f"Admin changing puzzle to {msg['puzzle']}")
                         if error := await manager.switch_puzzle(msg["puzzle"], expire_submissions=True):
                             await send(ws, error)
-                        else:
-                            # Send updated puzzle list with new current
-                            await send(ws, manager.get_puzzle_list())
                     elif msg["type"] == "add_player":
                         if error := await manager.add_player(msg["name"]):
                             await send(ws, error)
@@ -976,7 +975,7 @@ async def ws_handler(
                             await send(ws, error)
                     elif msg["type"] == "reload_puzzles":
                         await manager.reload_puzzles()
-                        await send(ws, manager.get_puzzle_list())
+                        # reload_puzzles already broadcasts the puzzle list to all admins
                     elif msg["type"] == "administer_debuff":
                         if error := manager.administer_debuff(msg):
                             await send(ws, error)

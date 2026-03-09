@@ -18,20 +18,25 @@ export type SpectatorState = BasePlayerState & {
 export class SpectatorController extends AbstractPlayerController<SpectatorState> {
   protected createState(): SpectatorState {
     return {
+      puzzle: null,
       rendered: undefined,
       output: "",
-      debuffs: [],
-      activeDebuffNames: new Set(),
-      screensaverActive: false,
-      screensaverTimeout: null,
       submissionState: null,
       submissionError: null,
+
+      debuffs: [],
+      activeDebuffNames: new Set(),
+
+      screensaverActive: false,
+      screensaverTimeout: null,
+      clippyEdited: false,
+      clippyBlocked: 0,
       birdInit: null,
       birdPos: null,
     };
   }
 
-  protected update(slice: Partial<SpectatorState> | ((state: SpectatorState) => Partial<SpectatorState>)) {
+  update(slice: Partial<SpectatorState> | ((state: SpectatorState) => Partial<SpectatorState>)) {
     this.usePlayerStore.setState(slice);
   }
 

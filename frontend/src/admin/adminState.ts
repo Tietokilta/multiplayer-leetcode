@@ -4,7 +4,7 @@ import { type ConnState, GameServerHandler } from "../connection";
 import type { DebuffItem } from "../messages";
 import { SpectatorController } from "./SpectatorController";
 
-type PuzzleInfo = { id: string; title: string };
+type PuzzleInfo = { id: string; title: string; description: string };
 
 type AdminCmd =
   | { type: "admin_login"; password: string }
@@ -45,6 +45,7 @@ export function useAdminState({ spectateAll = false }: Options) {
 
   const spectators = useRef<Map<string, SpectatorController>>(new Map());
   const prevPuzzleRef = useRef<string | null | undefined>(undefined);
+  const currentPuzzleRef = useRef<PuzzleInfo | null>(null);
 
   const getController = useCallback((player: string): SpectatorController => {
     if (!spectators.current.has(player)) {
@@ -63,19 +64,23 @@ export function useAdminState({ spectateAll = false }: Options) {
     server.handleLogin = setLoggedIn;
     server.handleLoginError = setLoginError;
     server.handleMessage = (data) => {
-      console.log("Admin received:", data);
-
       switch (data.type) {
-        case "puzzles":
+        case "puzzles": {
           setPuzzles(data.puzzles);
           setCurrentPuzzle(data.current);
           if (prevPuzzleRef.current !== data.current) {
             prevPuzzleRef.current = data.current;
             for (const controller of spectators.current.values()) controller.reset();
           }
+          currentPuzzleRef.current = data.puzzles.find((p) => p.id === data.current) ?? null;
+          for (const controller of spectators.current.values()) controller.update({ puzzle: currentPuzzleRef.current });
           break;
+        }
         case "players":
           setPlayers(data.players);
+          if (currentPuzzleRef.current) {
+            for (const player of data.players) getController(player).update({ puzzle: currentPuzzleRef.current });
+          }
           break;
         case "pending_logins":
           setPendingLogins(data.ids);

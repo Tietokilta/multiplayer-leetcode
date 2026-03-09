@@ -1,8 +1,10 @@
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { clippyDebuffs, Debuff } from "../debuffs";
-import type { PlayerController } from "./PlayerController";
+import { AngryBird } from "./AngryBird";
 import { Clippy } from "./Clippy";
+import { DebuffQueue } from "./DebuffQueue";
+import type { AbstractPlayerController } from "./PlayerController";
 
 function YoutubeEmbed({
   controller,
@@ -13,7 +15,7 @@ function YoutubeEmbed({
   inactiveClass,
   duration,
 }: {
-  controller: PlayerController;
+  controller: AbstractPlayerController;
   videoId: string;
   debuff: Debuff;
   className?: string;
@@ -52,7 +54,7 @@ function YoutubeEmbed({
   );
 }
 
-export function SubwaySurfers({ controller }: { controller: PlayerController }) {
+function SubwaySurfers({ controller }: { controller: AbstractPlayerController }) {
   return YoutubeEmbed({
     controller,
     videoId: "QPW3XwBoQlw",
@@ -64,7 +66,7 @@ export function SubwaySurfers({ controller }: { controller: PlayerController }) 
   });
 }
 
-function CatVideo({ controller }: { controller: PlayerController }) {
+function CatVideo({ controller }: { controller: AbstractPlayerController }) {
   return YoutubeEmbed({
     controller,
     videoId: "lEtLb86O7NQ",
@@ -76,7 +78,7 @@ function CatVideo({ controller }: { controller: PlayerController }) {
   });
 }
 
-export function Screensaver({ controller }: { controller: PlayerController }) {
+function Screensaver({ controller }: { controller: AbstractPlayerController }) {
   const active = controller.usePlayerStore((state) => state.screensaverActive);
   const delayRef = useRef({ x: 0, y: 0 });
   const prevActiveRef = useRef<boolean>(null);
@@ -98,12 +100,7 @@ export function Screensaver({ controller }: { controller: PlayerController }) {
   );
 }
 
-type Props = {
-  outputRef: RefObject<HTMLPreElement | null>;
-  controller: PlayerController;
-};
-
-export function LightsOut({ controller }: { controller: PlayerController }) {
+function LightsOut({ controller }: { controller: AbstractPlayerController }) {
   const debuff = controller.usePlayerStore((state) =>
     state.activeDebuffNames.has(Debuff.lights_out)
       ? state.debuffs.find((d) => d.name === Debuff.lights_out)
@@ -116,7 +113,7 @@ export function LightsOut({ controller }: { controller: PlayerController }) {
   );
 }
 
-function ClippyController({ controller }: { controller: PlayerController }) {
+function ClippyController({ controller }: { controller: AbstractPlayerController }) {
   const debuff = controller.usePlayerStore((state) =>
     clippyDebuffs.some((d) => state.activeDebuffNames.has(d))
       ? state.debuffs.find((d) => clippyDebuffs.includes(d.name))
@@ -127,59 +124,83 @@ function ClippyController({ controller }: { controller: PlayerController }) {
   return <Clippy key={debuff.endTime} debuff={debuff} done={done} />;
 }
 
-function Game({ outputRef, controller }: Props) {
+function AngryBirdController({ controller }: { controller: AbstractPlayerController }) {
+  const debuff = controller.usePlayerStore((state) =>
+    state.activeDebuffNames.has(Debuff.angry_bird)
+      ? state.debuffs.find((d) => d.name === Debuff.angry_bird)
+      : undefined,
+  );
+  if (!debuff) return null;
+  return <AngryBird key={debuff.endTime} debuff={debuff} controller={controller} />;
+}
+
+type Props = {
+  outputRef?: RefObject<HTMLPreElement | null>;
+  controller: AbstractPlayerController;
+  children?: ReactNode;
+};
+
+function Game({ outputRef, controller, children }: Props) {
   const { puzzle, output, submissionState, submissionError, rendered, clippyBlocked, activeDebuffNames } =
     controller.usePlayerStore();
   const clippyActive = clippyDebuffs.some((d) => activeDebuffNames.has(d));
   const [isOutputScrolling, setIsOutputScrolling] = useState(false);
 
   useEffect(() => {
-    const el = outputRef.current;
+    const el = outputRef?.current;
     if (!el) return;
     setIsOutputScrolling(el.scrollHeight > el.clientHeight);
   }, [output, outputRef]);
 
   return (
-    <>
-      <CatVideo controller={controller} />
-      <ClippyController controller={controller} />
-      {puzzle ? (
-        <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
-          <h2 className="font-bold text-xl">{puzzle.title}</h2>
-          <Markdown>{puzzle.description}</Markdown>
+    <div className="flex">
+      <div className="flex-1 relative flex flex-col p-4 gap-4 h-screen">
+        {children}
+        <CatVideo controller={controller} />
+        <ClippyController controller={controller} />
+        {puzzle ? (
+          <div className="border rounded p-4 flex flex-col gap-2 mlc--puzzle">
+            <h2 className="font-bold text-xl">{puzzle.title}</h2>
+            <Markdown>{puzzle.description}</Markdown>
+          </div>
+        ) : (
+          <div className="border rounded p-4 text-red-500">The server currently has no puzzle loaded.</div>
+        )}
+        <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
+          <div className="border rounded p-4 mlc--editor">
+            <h2 className="font-bold text-lg mb-2">Code</h2>
+            {rendered}
+          </div>
+          <div className="border rounded p-4 flex flex-col gap-2 min-h-0 debuff-nausea mlc--output">
+            {(submissionState === null || submissionState === "invalid") &&
+              (clippyActive && clippyBlocked > 0 ? (
+                <div key={clippyBlocked} className="text-red-500 font-bold animate-[fadeout_1s_linear_1_forwards]">
+                  Clippy is helping you, please wait!
+                </div>
+              ) : (
+                <div className="text-blue-500 font-bold animate-[pulse_ease_2s_infinite]">
+                  Press Ctrl+Enter to submit{isOutputScrolling && ", Ctrl+Up/Down to scroll output"}
+                </div>
+              ))}
+            {submissionState === "running" && (
+              <div className="text-blue-500 font-bold animate-[pulse_ease_1s_infinite]">Submission running...</div>
+            )}
+            {submissionState === "valid" && <div className="text-green-500 font-bold">Submission valid!</div>}
+            <pre ref={outputRef} className="whitespace-pre-wrap flex-shrink overflow-y-auto scroll-smooth">
+              {output}
+            </pre>
+            {(submissionState === "invalid" || submissionError) && (
+              <div className="text-red-500 font-bold">{submissionError ?? "Submission failed with unknown status"}</div>
+            )}
+          </div>
         </div>
-      ) : (
-        <div className="border rounded p-4 text-red-500">The server currently has no puzzle loaded.</div>
-      )}
-      <div className="grid grid-cols-2 gap-4 flex-1 min-h-0">
-        <div className="border rounded p-4 mlc--editor">
-          <h2 className="font-bold text-lg mb-2">Code</h2>
-          {rendered}
-        </div>
-        <div className="border rounded p-4 flex flex-col gap-2 min-h-0 debuff-nausea mlc--output">
-          {(submissionState === null || submissionState === "invalid") &&
-            (clippyActive && clippyBlocked > 0 ? (
-              <div key={clippyBlocked} className="text-red-500 font-bold animate-[fadeout_1s_linear_1_forwards]">
-                Clippy is helping you, please wait!
-              </div>
-            ) : (
-              <div className="text-blue-500 font-bold animate-[pulse_ease_2s_infinite]">
-                Press Ctrl+Enter to submit{isOutputScrolling && ", Ctrl+Up/Down to scroll output"}
-              </div>
-            ))}
-          {submissionState === "running" && (
-            <div className="text-blue-500 font-bold animate-[pulse_ease_1s_infinite]">Submission running...</div>
-          )}
-          {submissionState === "valid" && <div className="text-green-500 font-bold">Submission valid!</div>}
-          <pre ref={outputRef} className="whitespace-pre-wrap flex-shrink overflow-y-auto scroll-smooth">
-            {output}
-          </pre>
-          {(submissionState === "invalid" || submissionError) && (
-            <div className="text-red-500 font-bold">{submissionError ?? "Submission failed with unknown status"}</div>
-          )}
-        </div>
+        <DebuffQueue controller={controller} />
       </div>
-    </>
+      <SubwaySurfers controller={controller} />
+      <Screensaver controller={controller} />
+      <LightsOut controller={controller} />
+      <AngryBirdController controller={controller} />
+    </div>
   );
 }
 

@@ -1,57 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import { createPortal } from "react-dom";
 import { stateColors } from "../connection";
+import Game from "../player/Game";
 import { AdminLogin } from "./AdminLogin";
 import { useAdminState } from "./adminState";
 import { PlayerCard } from "./PlayerCard";
-import type { SpectatorController } from "./SpectatorController";
-import { submissionColors } from "./submissionColors";
-
-function SpotlightView({ name, controller }: { name: string; controller: SpectatorController }) {
-  const state = controller.usePlayerStore(
-    useShallow((s) => ({
-      submissionState: s.submissionState,
-      rendered: s.rendered,
-      output: s.output,
-      debuffs: s.debuffs,
-    })),
-  );
-
-  return (
-    <div className="flex flex-col h-screen p-4 bg-gray-950 text-gray-100">
-      <div className="flex justify-between items-center mb-2 shrink-0">
-        <span className="text-2xl font-bold">{name}</span>
-        {state.submissionState && (
-          <span className={`text-lg ${submissionColors[state.submissionState]}`}>{state.submissionState}</span>
-        )}
-      </div>
-      <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm overflow-auto flex-1 min-h-0 mlc--editor">
-        {state.rendered}
-      </div>
-      {state.output && (
-        <div className="mt-2 shrink-0">
-          <div className="text-xs text-gray-500 mb-1">Output:</div>
-          <pre className="bg-gray-800 text-gray-100 p-2 rounded text-sm font-mono overflow-auto max-h-32">
-            {state.output}
-          </pre>
-        </div>
-      )}
-      {state.debuffs.length > 0 && (
-        <div className="mt-2 shrink-0">
-          <div className="text-xs text-gray-500 mb-1">Penalties:</div>
-          <div className="flex flex-wrap gap-1">
-            {state.debuffs.map((d, i) => (
-              <span key={i} className="text-sm bg-orange-900/50 text-orange-300 rounded px-2 py-0.5">
-                {d.name} ({Math.ceil(d.duration)}s)
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function Spectate() {
   const adminState = useAdminState({ spectateAll: true });
@@ -81,26 +34,57 @@ export default function Spectate() {
     });
   }, [players]);
 
+  const showSpotlightWarning = () => {
+    const win = spotlightWindowRef.current;
+    if (!win || win.closed) return;
+    const overlay = win.document.createElement("div");
+    overlay.style.cssText =
+      "position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;color:white;font-size:2rem;font-family:sans-serif;text-align:center";
+    overlay.textContent = "⚠ Main window closed";
+    win.document.body.appendChild(overlay);
+  };
+
   useEffect(() => {
+    const onMessage = (evt: MessageEvent) => {
+      if (evt.source !== spotlightWindowRef.current) return;
+      if (evt.data?.type !== "spotlight-ready") return;
+      const win = spotlightWindowRef.current!;
+      const root = win.document.getElementById("root");
+      console.log("Spotlight ready, setting container", root);
+      setSpotlightContainer(root);
+      win.addEventListener("beforeunload", () => setSpotlightContainer(null));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    if (!loggedIn) return;
+
     const openSpotlight = (evt: KeyboardEvent) => {
       if (evt.key !== "s") return;
-      if (spotlightWindowRef.current && !spotlightWindowRef.current.closed) {
-        spotlightWindowRef.current.focus();
+      const existing = spotlightWindowRef.current;
+      if (existing && !existing.closed) {
+        setSpotlightContainer(null);
+        existing.location.href = `/spotlight?t=${Date.now()}`;
         return;
       }
-      const win = window.open("/spectate", "spotlight", "width=900,height=700");
+      const win = window.open(`/spotlight?t=${Date.now()}`, "spotlight", "width=900,height=700");
       if (!win) return;
       spotlightWindowRef.current = win;
-      win.addEventListener("load", () => {
-        setSpotlightContainer(win.document.getElementById("root"));
-      });
-      win.addEventListener("beforeunload", () => {
-        setSpotlightContainer(null);
-      });
     };
+
     window.addEventListener("keydown", openSpotlight);
     return () => {
       window.removeEventListener("keydown", openSpotlight);
+    };
+  }, [loggedIn]);
+
+  useEffect(() => {
+    window.addEventListener("beforeunload", showSpotlightWarning);
+    return () => {
+      window.removeEventListener("beforeunload", showSpotlightWarning);
+      showSpotlightWarning();
     };
   }, []);
 
@@ -123,7 +107,8 @@ export default function Spectate() {
   return (
     <>
       <span className={`absolute top-0 left-0 w-3 h-3 rounded-full inline-block ${stateColors[connState]}`} />
-      <div className="grid grid-cols-3 grid-rows-3 p-3 gap-3 h-screen">
+      {/* U2 projector screens overlap by about ml-3 :D */}
+      <div className="grid grid-cols-3 grid-rows-3 p-3 gap-3 h-screen ml-3">
         {gridSlots.map((player, i) =>
           player ? (
             <PlayerCard
@@ -142,9 +127,17 @@ export default function Spectate() {
         )}
       </div>
       {spotlightContainer &&
-        spotlightPlayer &&
         createPortal(
-          <SpotlightView name={spotlightPlayer} controller={getController(spotlightPlayer)} />,
+          spotlightPlayer ? (
+            <>
+              <Game controller={getController(spotlightPlayer)} />
+              <div className="fixed top-0 right-0 text-4xl text-semibold p-3 border-l border-b rounded-bl bg-gray-800 z-100">
+                {spotlightPlayer}
+              </div>
+            </>
+          ) : (
+            <div className="m-4 border rounded p-4">No spotlighted player</div>
+          ),
           spotlightContainer,
         )}
     </>
