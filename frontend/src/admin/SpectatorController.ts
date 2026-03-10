@@ -1,4 +1,4 @@
-import { Debuff } from "../debuffs";
+import { clippyDebuffs, Debuff } from "../debuffs";
 import type { DebuffItem } from "../messages";
 import type { AngryBirdInitPayload, AngryBirdPosPayload } from "../player/AngryBird";
 import { EditorState } from "../player/Editor";
@@ -56,6 +56,9 @@ export class SpectatorController extends AbstractPlayerController<SpectatorState
         if (this.confetti) {
           if (this.hasDebuff(Debuff.confetti)) this.confetti.fireConfetti();
           if (this.hasDebuff(Debuff.emoji_confetti)) this.confetti.fireEmojiConfetti();
+        }
+        if (clippyDebuffs.some((d) => this.hasDebuff(d))) {
+          this.update({ clippyEdited: true, clippyBlocked: 0 });
         }
         break;
       }

@@ -2,6 +2,9 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { fireConfetti, fireEmojiConfetti } from "./player/confetti.ts";
+import { preloadClippy } from "./player/clippyData.ts";
+
+preloadClippy();
 
 const { pathname } = window.location;
 if (pathname === "/spotlight") {

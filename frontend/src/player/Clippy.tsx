@@ -70,7 +70,7 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
         return;
       }
 
-      const img = getClippyImage(current.name);
+      const img = getClippyImage(current.name, canvas.ownerDocument);
       if (img.complete && img.naturalHeight > 0) {
         const animElapsed = elapsed - current.startMs;
         const totalFrames = Math.max(1, Math.round(img.naturalHeight / FRAME_H));

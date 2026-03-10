@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useInterval, useLocalStorage } from "usehooks-ts";
 import { stateColors } from "../connection";
-import { useClippyPreload } from "./clippyData";
 import { DebuffSelector } from "./DebuffSelector";
 import { RenderedEditor } from "./Editor";
 import Game from "./Game";
@@ -120,8 +119,6 @@ function App() {
       controller.keyboardServer.disconnect();
     };
   }, [controller]);
-
-  useClippyPreload();
 
   const minimalState = gameHasConnected && canConnect;
   const connState = (

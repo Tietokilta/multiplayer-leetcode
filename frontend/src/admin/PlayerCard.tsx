@@ -4,6 +4,7 @@ import type { SpectatorController } from "./SpectatorController";
 import { submissionColors } from "./submissionColors";
 import { DebuffQueue } from "../player/DebuffQueue";
 import { fireConfettiFromEl, fireEmojiConfettiFromEl } from "../player/confetti";
+import { LightsOut, Screensaver } from "../player/Game";
 
 export function PlayerCard({
   name,
@@ -77,6 +78,8 @@ export function PlayerCard({
           </div>
         </div>
       )}
+      <LightsOut controller={controller} spectator />
+      <Screensaver controller={controller} />
       <DebuffQueue minimal controller={controller} />
     </div>
   );

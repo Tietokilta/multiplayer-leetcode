@@ -43,7 +43,7 @@ export function DebuffSelector({ controller, myId }: { controller: PlayerControl
   }
 
   return (
-    <div className="border rounded p-3">
+    <div className="border rounded p-3 relative bg-gray-900 z-100">
       <h2 className="font-bold mb-2">Debuffs</h2>
       <div className="flex gap-4 items-start flex-wrap">
         <div className="flex flex-col gap-1">

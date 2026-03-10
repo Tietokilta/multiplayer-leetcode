@@ -107,11 +107,14 @@ export abstract class AbstractPlayerController<State extends BasePlayerState = B
     return debuffs.find((d) => d.name === name);
   }
 
-  protected debuffStarted(started: ActiveDebuff): void;
-  protected debuffStarted() {}
+  protected debuffStarted(started: ActiveDebuff): void {
+    if (clippyDebuffs.includes(started.name)) {
+      this.update({ clippyEdited: false, clippyBlocked: 0 });
+    }
+  }
 
-  protected debuffEnded(ended: ActiveDebuff): void;
-  protected debuffEnded() {}
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  protected debuffEnded(ended: ActiveDebuff): void {}
 
   protected updateDebuffs(newDebuffs: DebuffItem[] | false) {
     const now = Date.now();
@@ -228,9 +231,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
   }
 
   protected debuffStarted(started: ActiveDebuff): void {
-    if (clippyDebuffs.includes(started.name)) {
-      this.update({ clippyEdited: false, clippyBlocked: 0 });
-    }
+    super.debuffStarted(started);
     if (started.name === Debuff.keyboard_cat) {
       // Allow some time for the video to start, then start injecting random keys
       setTimeout(() => this.injectRandomKey(), 1500);
@@ -347,7 +348,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
       port === "cat" || document.hasFocus(),
     );
 
-    this.updateScreensaver(true);
+    if (document.hasFocus()) this.updateScreensaver(true);
 
     switch (action) {
       case "edit":

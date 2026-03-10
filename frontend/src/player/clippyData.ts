@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-
 // Animation durations in milliseconds
 export const CLIPPY_ANIMATIONS: Record<string, number> = {
   base: 100,
@@ -95,21 +93,23 @@ export function buildSchedule(duration: number): ScheduleItem[] {
   return schedule;
 }
 
-export const clippyImageCache: Record<string, HTMLImageElement> = {};
+export const clippyImageCache: Map<Document, Record<string, HTMLImageElement>> = new Map();
 
-export function getClippyImage(name: string): HTMLImageElement {
-  if (!clippyImageCache[name]) {
+export function getClippyImage(name: string, document: Document): HTMLImageElement {
+  if (!clippyImageCache.has(document)) {
+    clippyImageCache.set(document, {});
+  }
+  const docCache = clippyImageCache.get(document)!;
+  if (!docCache[name]) {
     const img = new Image();
     img.src = `/clippy/${name}.png`;
-    clippyImageCache[name] = img;
+    docCache[name] = img;
   }
-  return clippyImageCache[name];
+  return docCache[name];
 }
 
-export function useClippyPreload() {
-  useEffect(() => {
-    for (const name of Object.keys(CLIPPY_ANIMATIONS)) {
-      getClippyImage(name);
-    }
-  }, []);
+export function preloadClippy() {
+  for (const name of Object.keys(CLIPPY_ANIMATIONS)) {
+    getClippyImage(name, document);
+  }
 }

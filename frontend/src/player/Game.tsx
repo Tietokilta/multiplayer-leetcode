@@ -78,7 +78,7 @@ function CatVideo({ controller }: { controller: AbstractPlayerController }) {
   });
 }
 
-function Screensaver({ controller }: { controller: AbstractPlayerController }) {
+export function Screensaver({ controller }: { controller: AbstractPlayerController }) {
   const active = controller.usePlayerStore((state) => state.screensaverActive);
   const delayRef = useRef({ x: 0, y: 0 });
   const prevActiveRef = useRef<boolean>(null);
@@ -100,7 +100,7 @@ function Screensaver({ controller }: { controller: AbstractPlayerController }) {
   );
 }
 
-function LightsOut({ controller }: { controller: AbstractPlayerController }) {
+export function LightsOut({ controller, spectator }: { controller: AbstractPlayerController; spectator?: boolean }) {
   const debuff = controller.usePlayerStore((state) =>
     state.activeDebuffNames.has(Debuff.lights_out)
       ? state.debuffs.find((d) => d.name === Debuff.lights_out)
@@ -109,7 +109,10 @@ function LightsOut({ controller }: { controller: AbstractPlayerController }) {
   if (!debuff) return null;
   const radius = Math.round(500 / debuff.strength);
   return (
-    <div className="absolute inset-0 z-48 mlc--lights-out" style={{ "--sl-r": `${radius}vw` } as React.CSSProperties} />
+    <div
+      className="absolute inset-0 z-48 mlc--lights-out"
+      style={{ "--sl-r": spectator ? `${radius / 2}vw` : `${radius}vw` } as React.CSSProperties}
+    />
   );
 }
 
