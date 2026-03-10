@@ -7,23 +7,7 @@ import { useAdminState } from "./adminState";
 import { PlayerCard } from "./PlayerCard";
 import type { SpectatorController } from "./SpectatorController";
 
-function Spotlight({
-  player,
-  controller,
-  window,
-}: {
-  player: string;
-  controller: SpectatorController;
-  window: Window | null;
-}) {
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/immutability
-    controller.confetti = window;
-    return () => {
-      controller.confetti = null;
-    };
-  }, [controller, window]);
-
+function Spotlight({ player, controller }: { player: string; controller: SpectatorController }) {
   return (
     <>
       <Game controller={controller} />
@@ -36,7 +20,6 @@ function Spotlight({
 
 function useSpotlightWindow(enableListener: boolean) {
   const [spotlightContainer, setSpotlightContainer] = useState<HTMLElement | null>(null);
-  const [spotlightWindow, setSpotlightWindow] = useState<Window | null>(null);
   const spotlightWindowRef = useRef<Window | null>(null);
 
   const showSpotlightWarning = () => {
@@ -58,11 +41,7 @@ function useSpotlightWindow(enableListener: boolean) {
       const root = win.document.getElementById("root");
       console.log("Spotlight ready, setting container", root);
       setSpotlightContainer(root);
-      setSpotlightWindow(win);
-      win.addEventListener("beforeunload", () => {
-        setSpotlightContainer(null);
-        setSpotlightWindow(null);
-      });
+      win.addEventListener("beforeunload", () => setSpotlightContainer(null));
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -77,7 +56,6 @@ function useSpotlightWindow(enableListener: boolean) {
       const existing = spotlightWindowRef.current;
       if (existing && !existing.closed) {
         setSpotlightContainer(null);
-        setSpotlightWindow(null);
         existing.location.href = `/spotlight?t=${Date.now()}`;
         return;
       }
@@ -104,18 +82,17 @@ function useSpotlightWindow(enableListener: boolean) {
   const checkSpotlightWindow = () => {
     if (spotlightWindowRef.current?.closed) {
       setSpotlightContainer(null);
-      setSpotlightWindow(null);
     }
   };
 
-  return { spotlightContainer, spotlightWindow, checkSpotlightWindow };
+  return { spotlightContainer, checkSpotlightWindow };
 }
 
 export default function Spectate() {
   const adminState = useAdminState({ spectateAll: true });
   const { connState, loggedIn, players, getController } = adminState;
 
-  const { spotlightContainer, spotlightWindow, checkSpotlightWindow } = useSpotlightWindow(loggedIn);
+  const { spotlightContainer, checkSpotlightWindow } = useSpotlightWindow(loggedIn);
 
   // 10 fixed slots: indices 0-8 = grid, index 9 = spotlight. null = empty.
   const [orderedPlayers, setOrderedPlayers] = useState<(string | null)[]>(Array(10).fill(null));
@@ -148,12 +125,22 @@ export default function Spectate() {
     });
   };
 
+  const gridSlots = orderedPlayers.slice(0, 9);
+  const spotlightPlayer = orderedPlayers[9];
+
+  const spotlightController = spotlightPlayer ? getController(spotlightPlayer) : null;
+  // eslint-disable-next-line react-hooks/immutability
+  useEffect(() => {
+    if (!spotlightController || !spotlightContainer) return;
+    spotlightController.confetti = spotlightContainer.ownerDocument.defaultView?.confetti ?? null;
+    return () => {
+      spotlightController.confetti = null;
+    };
+  }, [spotlightController, spotlightContainer]);
+
   if (!loggedIn) {
     return <AdminLogin state={adminState} />;
   }
-
-  const gridSlots = orderedPlayers.slice(0, 9);
-  const spotlightPlayer = orderedPlayers[9];
 
   return (
     <>
@@ -180,7 +167,7 @@ export default function Spectate() {
       {spotlightContainer &&
         createPortal(
           spotlightPlayer ? (
-            <Spotlight player={spotlightPlayer} controller={getController(spotlightPlayer)} window={spotlightWindow} />
+            <Spotlight player={spotlightPlayer} controller={getController(spotlightPlayer)} />
           ) : (
             <div className="m-4 border rounded p-4">No spotlighted player</div>
           ),

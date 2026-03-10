@@ -1,6 +1,11 @@
 import { clippyDebuffs, Debuff } from "../debuffs";
 import type { DebuffItem } from "../messages";
-import type { AngryBirdInitPayload, AngryBirdPosPayload } from "../player/AngryBird";
+import type {
+  AngryBirdCharConfettiPayload,
+  AngryBirdFireConfettiPayload,
+  AngryBirdInitPayload,
+  AngryBirdPosPayload,
+} from "../player/AngryBird";
 import { EditorState } from "../player/Editor";
 import { AbstractPlayerController, type BasePlayerState } from "../player/PlayerController";
 
@@ -11,13 +16,12 @@ type SpectateMessage =
   | { type: "spectate_debuffs"; player: string; debuffs: DebuffItem[] }
   | { type: "spectate_debuff_state"; player: string; name: string; payload: unknown };
 
-export type SpectatorState = BasePlayerState & {
-  birdInit: AngryBirdInitPayload | null;
-  birdPos: AngryBirdPosPayload | null;
-};
+export type SpectatorState = BasePlayerState;
 
 export class SpectatorController extends AbstractPlayerController<SpectatorState> {
-  confetti: Pick<Window, "fireConfetti" | "fireEmojiConfetti"> | null = null;
+  confetti: ConfettiApi | null = null;
+  birdInit: AngryBirdInitPayload | null = null;
+  birdPos: AngryBirdPosPayload | null = null;
 
   protected createState(): SpectatorState {
     return {
@@ -34,8 +38,6 @@ export class SpectatorController extends AbstractPlayerController<SpectatorState
       screensaverTimeout: null,
       clippyEdited: false,
       clippyBlocked: 0,
-      birdInit: null,
-      birdPos: null,
     };
   }
 
@@ -53,10 +55,8 @@ export class SpectatorController extends AbstractPlayerController<SpectatorState
       case "spectate_editor": {
         this.editor.load({ type: "editor", code: msg.code, row: msg.row, col: msg.col });
         this.rerender();
-        if (this.confetti) {
-          if (this.hasDebuff(Debuff.confetti)) this.confetti.fireConfetti();
-          if (this.hasDebuff(Debuff.emoji_confetti)) this.confetti.fireEmojiConfetti();
-        }
+        if (this.hasDebuff(Debuff.confetti)) this.confetti?.fireConfettiAtCursor();
+        if (this.hasDebuff(Debuff.emoji_confetti)) this.confetti?.fireEmojiConfettiAtCursor();
         if (clippyDebuffs.some((d) => this.hasDebuff(d))) {
           this.update({ clippyEdited: true, clippyBlocked: 0 });
         }
@@ -81,10 +81,19 @@ export class SpectatorController extends AbstractPlayerController<SpectatorState
         if (msg.name === "screensaver") {
           this.update({ screensaverActive: payload.kind === "active" });
         } else if (msg.name === "angry_bird") {
-          this.update((prev) => ({
-            ...(payload.kind === "init" ? { birdInit: payload as AngryBirdInitPayload } : {}),
-            birdPos: payload.kind === "pos" ? (payload as AngryBirdPosPayload) : prev.birdPos,
-          }));
+          if (payload.kind === "init") {
+            this.birdInit = payload as AngryBirdInitPayload;
+            this.birdPos = null;
+          } else if (payload.kind === "pos") {
+            this.birdPos = payload as AngryBirdPosPayload;
+          } else if (payload.kind === "char_confetti") {
+            const p = payload as AngryBirdCharConfettiPayload;
+            this.confetti?.fireCharConfetti(p.char, p.color, { x: p.x, y: p.y });
+          } else if (payload.kind === "fire_confetti") {
+            const p = payload as AngryBirdFireConfettiPayload;
+            this.confetti?.fireConfettiAt({ x: p.x, y: p.y }, ["#ff0000", "#cc0000", "#ff4444", "#ff2222"]);
+            this.birdPos = null;
+          }
         }
         break;
       }

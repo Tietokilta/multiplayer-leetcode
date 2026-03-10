@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { stateColors } from "../connection";
+import { DebuffSelector } from "../player/DebuffSelector";
 import { useAdminState } from "./adminState";
 import { AdminLogin } from "./AdminLogin";
 import { PlayerCard } from "./PlayerCard";
@@ -235,6 +236,12 @@ export default function Admin() {
           )}
         </div>
       </div>
+
+      {players.length > 0 && (
+        <div className="mb-6">
+          <DebuffSelector server={server} players={players} />
+        </div>
+      )}
 
       {/* Spectate Views */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

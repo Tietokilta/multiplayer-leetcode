@@ -1,6 +1,8 @@
 import { useState, type MouseEvent } from "react";
 import { debuffInfo, type Debuff } from "../debuffs";
-import { PlayerController } from "./PlayerController";
+import type { GameServerHandler } from "../connection";
+import type { PlayerCmd, PlayerMessage } from "../messages";
+import type { AdminCmd, AdminMessage } from "../admin/adminState";
 
 const debuffNames = Object.keys(debuffInfo) as Debuff[];
 
@@ -16,10 +18,21 @@ function initialStrength(name: Debuff): number {
   return max ? Math.ceil(max / 2) : 1;
 }
 
-export function DebuffSelector({ controller, myId }: { controller: PlayerController; myId: string }) {
+export function DebuffSelector({
+  server,
+  myId,
+  players,
+  onClearAll,
+}: {
+  server: GameServerHandler<PlayerCmd, PlayerMessage> | GameServerHandler<AdminCmd, AdminMessage>;
+  myId?: string;
+  players?: string[];
+  onClearAll?: () => void;
+}) {
   const [selectedName, setSelectedName] = useState<Debuff>(debuffNames[0]);
   const [duration, setDuration] = useState(() => initialDuration(debuffNames[0]));
   const [strength, setStrength] = useState(() => initialStrength(debuffNames[0]));
+  const [selectedPlayer, setSelectedPlayer] = useState<string>(() => players?.[0] ?? myId ?? "");
 
   const info = debuffInfo[selectedName];
   const maxStrength = info.maxStrength;
@@ -32,9 +45,9 @@ export function DebuffSelector({ controller, myId }: { controller: PlayerControl
 
   function administer(evt: MouseEvent<HTMLButtonElement>) {
     evt.currentTarget.blur();
-    controller.server.send({
+    server.send({
       type: "administer_debuff",
-      players: [myId],
+      players: [selectedPlayer],
       name: selectedName,
       debuff_type: info.type,
       strength,
@@ -46,6 +59,20 @@ export function DebuffSelector({ controller, myId }: { controller: PlayerControl
     <div className="border rounded p-3 relative bg-gray-900 z-100">
       <h2 className="font-bold mb-2">Debuffs</h2>
       <div className="flex gap-4 items-start flex-wrap">
+        {players && (
+          <select
+            value={selectedPlayer}
+            onChange={(e) => setSelectedPlayer(e.target.value)}
+            className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
+          >
+            {players.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        )}
+
         <div className="flex flex-col gap-1">
           <select
             value={selectedName}
@@ -92,12 +119,14 @@ export function DebuffSelector({ controller, myId }: { controller: PlayerControl
         <button onClick={administer} className="text-red-500 underline p-2 rounded cursor-pointer hover:bg-red-500/25">
           Administer
         </button>
-        <button
-          onClick={() => controller.handleMessage({ type: "debuffs", debuffs: [] })}
-          className="text-gray-400 underline p-2 rounded cursor-pointer hover:bg-gray-500/25"
-        >
-          Clear all
-        </button>
+        {onClearAll && (
+          <button
+            onClick={onClearAll}
+            className="text-gray-400 underline p-2 rounded cursor-pointer hover:bg-gray-500/25"
+          >
+            Clear all
+          </button>
+        )}
       </div>
     </div>
   );

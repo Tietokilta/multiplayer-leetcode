@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { PlayerController, type AbstractPlayerController, type ActiveDebuff } from "./PlayerController";
-import { fireCharConfetti, fireConfettiAt } from "./confetti";
+import { angryBirdCache } from "./angryBirdData";
 
 const GRAVITY = 400; // px/s², positive = downward
 const STILL_VELOCITY_THRESHOLD = 50; // px/s
@@ -13,15 +13,6 @@ const RB2_LOCAL = { x: 100, y: 51 };
 function dist(x1: number, y1: number, x2: number, y2: number) {
   return Math.hypot(x2 - x1, y2 - y1);
 }
-
-function loadImage(src: string): HTMLImageElement {
-  const img = new Image();
-  img.src = src;
-  return img;
-}
-
-const slingshotImg = loadImage("/angry_bird/slingshot.png");
-const birdImg = loadImage("/angry_bird/red.png");
 
 function easeSpringCosine(t: number) {
   return 1 - Math.cos((Math.PI / 2) * t);
@@ -59,11 +50,32 @@ export type AngryBirdPosPayload = {
   vy: number;
   angle: number;
   phase: AngryBirdPhase;
+  showBands: boolean;
+  bandAlpha: number;
 };
 
-export type AngryBirdPayload = AngryBirdInitPayload | AngryBirdPosPayload;
+export type AngryBirdCharConfettiPayload = {
+  kind: "char_confetti";
+  char: string;
+  color: string;
+  x: number;
+  y: number;
+};
+
+export type AngryBirdFireConfettiPayload = {
+  kind: "fire_confetti";
+  x: number;
+  y: number;
+};
+
+export type AngryBirdPayload =
+  | AngryBirdInitPayload
+  | AngryBirdPosPayload
+  | AngryBirdCharConfettiPayload
+  | AngryBirdFireConfettiPayload;
 
 function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, canvas: HTMLCanvasElement) {
+  const theWindow = canvas.ownerDocument.defaultView ?? window;
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
   const ctx = canvas.getContext("2d")!;
@@ -200,11 +212,11 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
     if (showBands) {
       drawRubberBand(bx, by, bandAlpha);
     }
-    ctx.drawImage(slingshotImg, sx, sy, slingshotW, slingshotH);
+    ctx.drawImage(angryBirdCache.get("slingshot", canvas.ownerDocument), sx, sy, slingshotW, slingshotH);
     ctx.save();
     ctx.translate(bx, by);
     ctx.rotate(birdAngle);
-    ctx.drawImage(birdImg, -birdCenterX, -birdCenterY, birdImgW, birdImgH);
+    ctx.drawImage(angryBirdCache.get("red", canvas.ownerDocument), -birdCenterX, -birdCenterY, birdImgW, birdImgH);
     ctx.restore();
   }
 
@@ -231,7 +243,12 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
         if (dist(birdX, birdY, cx, cy) < birdRadius + rect.width * 0.7) {
           controller.editor.code[i][j] = " ";
           const color = window.getComputedStyle(spans[j]).color;
-          fireCharConfetti(char, color, { x: cx, y: cy });
+          controller.confetti?.fireCharConfetti(char, color, { x: cx, y: cy });
+          controller.server.send({
+            type: "debuff_state",
+            name: "angry_bird",
+            payload: { kind: "char_confetti", char, color, x: cx, y: cy } satisfies AngryBirdCharConfettiPayload,
+          });
           strength--;
           vx *= 1 - 1 / debuff.strength;
           vy *= 1 - 1 / debuff.strength;
@@ -322,6 +339,8 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
     const dt = Math.min((now - lastTime) / 1000, 0.05); // cap dt at 50ms
     lastTime = now;
     const elapsed = now - phaseStartTime;
+    let showBands = false;
+    let bandAlpha = 0;
 
     if (phase === "charging") {
       // Wobble bird in place
@@ -329,6 +348,8 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
       const wobbleY = loadedY + Math.cos(elapsed * 0.027) * 2;
       birdX = wobbleX;
       birdY = wobbleY;
+      showBands = true;
+      bandAlpha = 1;
       drawFrame(birdX, birdY, true);
       if (elapsed > 4000) {
         phase = "launching";
@@ -340,7 +361,8 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
       birdX = loadedX + (launchEndX - loadedX) * t;
       birdY = loadedY + (launchEndY - loadedY) * t;
       // Rubber bands snap back toward attachment points as bird leaves
-      const bandAlpha = 1 - t;
+      showBands = true;
+      bandAlpha = 1 - t;
       drawFrame(birdX, birdY, true, bandAlpha);
       if (u >= 1) {
         phase = "flying";
@@ -406,7 +428,12 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
         if (stillTime >= STILL_DURATION) {
           cancelAnimationFrame(rafId);
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          fireConfettiAt({ x: birdX, y: birdY }, ["#ff0000", "#cc0000", "#ff4444", "#ff2222"]);
+          controller.confetti?.fireConfettiAt({ x: birdX, y: birdY }, ["#ff0000", "#cc0000", "#ff4444", "#ff2222"]);
+          controller.server.send({
+            type: "debuff_state",
+            name: "angry_bird",
+            payload: { kind: "fire_confetti", x: birdX, y: birdY } satisfies AngryBirdFireConfettiPayload,
+          });
           return;
         }
       } else {
@@ -419,24 +446,118 @@ function playerAngryBird(debuff: ActiveDebuff, controller: PlayerController, can
     controller.server.send({
       type: "debuff_state",
       name: "angry_bird",
-      payload: { kind: "pos", x: birdX, y: birdY, vx, vy, angle, phase } satisfies AngryBirdPosPayload,
+      payload: {
+        kind: "pos",
+        x: birdX,
+        y: birdY,
+        vx,
+        vy,
+        angle,
+        phase,
+        showBands,
+        bandAlpha,
+      } satisfies AngryBirdPosPayload,
     });
-    rafId = requestAnimationFrame(frame);
+    rafId = theWindow.requestAnimationFrame(frame);
   }
 
-  rafId = requestAnimationFrame(frame);
+  rafId = theWindow.requestAnimationFrame(frame);
   return () => {
     cancelAnimationFrame(rafId);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   };
 }
 
-export function AngryBird({ debuff, controller }: { debuff: ActiveDebuff; controller: AbstractPlayerController }) {
+interface SpectatorAngryBirdController {
+  birdInit: AngryBirdInitPayload | null;
+  birdPos: AngryBirdPosPayload | null;
+  confetti: ConfettiApi | null;
+}
+
+function spectatorAngryBird(controller: SpectatorAngryBirdController, canvas: HTMLCanvasElement) {
+  const theWindow = canvas.ownerDocument.defaultView ?? window;
+  const ctx = canvas.getContext("2d")!;
+  let rafId: number;
+
+  function frame() {
+    const init = controller.birdInit;
+    const pos = controller.birdPos;
+
+    if (!init || !pos) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      rafId = theWindow.requestAnimationFrame(frame);
+      return;
+    }
+
+    if (canvas.width !== init.canvasW || canvas.height !== init.canvasH) {
+      canvas.width = init.canvasW;
+      canvas.height = init.canvasH;
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (pos.showBands) {
+      ctx.save();
+      ctx.globalAlpha = pos.bandAlpha;
+      ctx.strokeStyle = "#8B5E3C";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(init.rb1.x, init.rb1.y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(init.rb2.x, init.rb2.y);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.drawImage(
+      angryBirdCache.get("slingshot", canvas.ownerDocument),
+      init.slingshotX,
+      init.slingshotY,
+      init.slingshotW,
+      init.slingshotH,
+    );
+
+    const birdImgH = 0.8 * init.charH;
+    const birdImgW = birdImgH * (177 / 172);
+    const birdScale = birdImgH / 172;
+    const birdCenterX = 80 * birdScale;
+    const birdCenterY = 100 * birdScale;
+
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(pos.angle);
+    ctx.drawImage(angryBirdCache.get("red", canvas.ownerDocument), -birdCenterX, -birdCenterY, birdImgW, birdImgH);
+    ctx.restore();
+
+    rafId = theWindow.requestAnimationFrame(frame);
+  }
+
+  rafId = theWindow.requestAnimationFrame(frame);
+  return () => {
+    cancelAnimationFrame(rafId);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+}
+
+type AngryBirdProps = {
+  debuff: ActiveDebuff;
+  controller: AbstractPlayerController;
+};
+
+export function AngryBird({ debuff, controller }: AngryBirdProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!(controller instanceof PlayerController)) return;
-    return playerAngryBird(debuff, controller, canvasRef.current!);
+    const canvas = canvasRef.current!;
+    if (controller instanceof PlayerController) {
+      return playerAngryBird(debuff, controller, canvas);
+    } else if ("birdInit" in controller) {
+      return spectatorAngryBird(controller as unknown as SpectatorAngryBirdController, canvas);
+    }
   }, [controller, debuff]);
 
   return <canvas ref={canvasRef} className="fixed inset-0 z-50 pointer-events-none" />;

@@ -123,7 +123,7 @@ function App() {
   const minimalState = gameHasConnected && canConnect;
   const connState = (
     <div
-      className={`absolute ${minimalState ? "top-2 right-2" : "top-6 right-6"} z-100 flex items-center gap-2 text-xs`}
+      className={`absolute ${minimalState ? "top-2 right-2" : "top-6 right-6"} z-101 flex items-center gap-2 text-xs`}
     >
       {gameConnected !== "connected" && generatedId.test(myId) && (
         <div className="p-1 rounded bg-black text-bold">id={myId}</div>
@@ -242,7 +242,13 @@ function App() {
       {localKeyboard}
       <Game controller={controller} outputRef={outputRef}>
         {showKeyboards && <KeyboardList controller={controller} />}
-        {debuffTestMode && <DebuffSelector controller={controller} myId={myId} />}
+        {debuffTestMode && (
+          <DebuffSelector
+            server={controller.server}
+            myId={myId}
+            onClearAll={() => controller.handleMessage({ type: "debuffs", debuffs: [] })}
+          />
+        )}
       </Game>
     </>
   );

@@ -13,11 +13,11 @@ const jsConfetti = new JSConfetti({ canvas: confettiCanvas });
 
 const FUNNY_EMOJIS = ["💀", "🤡", "🐸", "🦆", "🍕", "🎉", "🤦", "😭", "🦧", "🔥", "💩", "🥴"];
 
-export function fireConfetti() {
+export function fireConfettiAtCursor() {
   fireConfettiFromEl(document.querySelector(".mlc--cursor")!);
 }
 
-export function fireEmojiConfetti() {
+export function fireEmojiConfettiAtCursor() {
   fireEmojiConfettiFromEl(document.querySelector(".mlc--cursor")!);
 }
 

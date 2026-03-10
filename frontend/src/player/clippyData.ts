@@ -1,3 +1,5 @@
+import { DocumentImageCache } from "./DocumentImageCache";
+
 // Animation durations in milliseconds
 export const CLIPPY_ANIMATIONS: Record<string, number> = {
   base: 100,
@@ -93,23 +95,10 @@ export function buildSchedule(duration: number): ScheduleItem[] {
   return schedule;
 }
 
-export const clippyImageCache: Map<Document, Record<string, HTMLImageElement>> = new Map();
-
-export function getClippyImage(name: string, document: Document): HTMLImageElement {
-  if (!clippyImageCache.has(document)) {
-    clippyImageCache.set(document, {});
-  }
-  const docCache = clippyImageCache.get(document)!;
-  if (!docCache[name]) {
-    const img = new Image();
-    img.src = `/clippy/${name}.png`;
-    docCache[name] = img;
-  }
-  return docCache[name];
-}
+export const clippyCache = new DocumentImageCache("/clippy");
 
 export function preloadClippy() {
   for (const name of Object.keys(CLIPPY_ANIMATIONS)) {
-    getClippyImage(name, document);
+    clippyCache.get(name, document);
   }
 }

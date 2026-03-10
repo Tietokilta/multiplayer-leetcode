@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { buildSchedule, getClippyImage } from "./clippyData";
-import type { ActiveDebuff } from "./PlayerController";
 import { Debuff } from "../debuffs";
+import { buildSchedule, clippyCache } from "./clippyData";
+import type { ActiveDebuff } from "./PlayerController";
 
 const FRAME_W = 124;
 const FRAME_H = 93;
@@ -49,6 +49,7 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
+    const theWindow = canvas.ownerDocument.defaultView ?? window;
     const mountTime = performance.now();
 
     console.log("[Clippy] schedule:", schedule.map(({ startMs, name }) => `${startMs}ms → ${name}`).join(", "));
@@ -70,7 +71,7 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
         return;
       }
 
-      const img = getClippyImage(current.name, canvas.ownerDocument);
+      const img = clippyCache.get(current.name, canvas.ownerDocument);
       if (img.complete && img.naturalHeight > 0) {
         const animElapsed = elapsed - current.startMs;
         const totalFrames = Math.max(1, Math.round(img.naturalHeight / FRAME_H));
@@ -79,10 +80,10 @@ export function Clippy({ debuff: { duration, name }, done = false }: ClippyProps
         ctx.drawImage(img, 0, frameIndex * FRAME_H, FRAME_W, FRAME_H, 0, 0, FRAME_W, FRAME_H);
       }
 
-      rafId = requestAnimationFrame(render);
+      rafId = theWindow.requestAnimationFrame(render);
     }
 
-    rafId = requestAnimationFrame(render);
+    rafId = theWindow.requestAnimationFrame(render);
 
     return () => cancelAnimationFrame(rafId);
   }, [schedule]);

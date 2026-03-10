@@ -6,16 +6,17 @@ import { SpectatorController } from "./SpectatorController";
 
 type PuzzleInfo = { id: string; title: string; description: string };
 
-type AdminCmd =
+export type AdminCmd =
   | { type: "admin_login"; password: string }
   | { type: "spectate"; players: string[] }
   | { type: "change_puzzle"; puzzle: string }
   | { type: "add_player"; name: string }
   | { type: "remove_player"; name: string }
   | { type: "reload_puzzles" }
-  | { type: "assign_id"; generated_id: string; player: string };
+  | { type: "assign_id"; generated_id: string; player: string }
+  | { type: "administer_debuff"; players: string[]; name: string; debuff_type: string; strength: number; duration: number };
 
-type AdminMessage =
+export type AdminMessage =
   | { type: "admin_welcome" }
   | { type: "puzzles"; puzzles: PuzzleInfo[]; current: string | null }
   | { type: "players"; players: string[] }

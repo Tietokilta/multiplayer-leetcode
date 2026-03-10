@@ -16,7 +16,7 @@ import { EditorState } from "./Editor";
 import { KeyboardServerHandler } from "./KeyboardServerHandler";
 import { mapKeyboardEvent } from "./LocalKeyboard";
 import { TurnTracker } from "./TurnTracker";
-import { fireConfetti, fireEmojiConfetti } from "./confetti";
+import { fireCharConfetti, fireConfettiAt, fireConfettiAtCursor, fireEmojiConfettiAtCursor } from "./confetti";
 
 export type ActiveDebuff = {
   name: Debuff;
@@ -83,6 +83,8 @@ function filterActiveDebuffs(debuffs: ActiveDebuff[]) {
 }
 
 export abstract class AbstractPlayerController<State extends BasePlayerState = BasePlayerState> {
+  abstract readonly confetti: ConfettiApi | null;
+
   editor = new EditorState(example);
   autoCycleLastTick = 0;
 
@@ -161,6 +163,13 @@ export abstract class AbstractPlayerController<State extends BasePlayerState = B
 }
 
 export class PlayerController extends AbstractPlayerController<PlayerState> {
+  confetti = {
+    fireConfettiAtCursor,
+    fireEmojiConfettiAtCursor,
+    fireConfettiAt,
+    fireCharConfetti,
+  };
+
   server = new GameServerHandler<PlayerCmd, PlayerMessage>();
   keyboardServer = new KeyboardServerHandler();
   turnTracker = new TurnTracker(this);
@@ -368,8 +377,8 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
           row: this.editor.row,
           col: this.editor.col,
         });
-        if (this.hasDebuff(Debuff.confetti)) fireConfetti();
-        if (this.hasDebuff(Debuff.emoji_confetti)) fireEmojiConfetti();
+        if (this.hasDebuff(Debuff.confetti)) fireConfettiAtCursor();
+        if (this.hasDebuff(Debuff.emoji_confetti)) fireEmojiConfettiAtCursor();
         let debuff;
         if (
           action === "edit" &&

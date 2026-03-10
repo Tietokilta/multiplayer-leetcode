@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { fireCharConfetti, fireConfettiAt, fireConfettiFromEl, fireEmojiConfettiFromEl } from "../player/confetti";
+import { DebuffQueue } from "../player/DebuffQueue";
+import { LightsOut, Screensaver } from "../player/Game";
 import type { SpectatorController } from "./SpectatorController";
 import { submissionColors } from "./submissionColors";
-import { DebuffQueue } from "../player/DebuffQueue";
-import { fireConfettiFromEl, fireEmojiConfettiFromEl } from "../player/confetti";
-import { LightsOut, Screensaver } from "../player/Game";
 
 export function PlayerCard({
   name,
@@ -28,14 +28,16 @@ export function PlayerCard({
 
   useLayoutEffect(() => {
     controller.confetti = {
-      fireConfetti: () => {
+      fireConfettiAtCursor: () => {
         const el = cardRef.current?.querySelector(".mlc--cursor") ?? null;
         if (el) fireConfettiFromEl(el);
       },
-      fireEmojiConfetti: () => {
+      fireEmojiConfettiAtCursor: () => {
         const el = cardRef.current?.querySelector(".mlc--cursor") ?? null;
         if (el) fireEmojiConfettiFromEl(el);
       },
+      fireConfettiAt,
+      fireCharConfetti,
     };
     return () => {
       controller.confetti = null;
