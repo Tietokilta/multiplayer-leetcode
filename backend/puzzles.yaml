@@ -4,6 +4,8 @@
   template: |
     # Your code here
     |
+  modelSolution: |
+    print("Hello, World!")
   wrapper: |
     print("Hello, World!")
     print("=== END EXPECTED OUTPUT ===")
@@ -17,6 +19,8 @@
     def sum_two_numbers(a, b):
       # Your code here
       return |
+  modelSolution: |
+    a + b
   wrapper: |
     {}
 
@@ -55,6 +59,10 @@
       a = 1
       b = 1
       |
+  modelSolution: |
+    for _ in range(n):
+      print(a)
+      a, b = b, a + b
   wrapper: |
     {}
 
@@ -91,6 +99,8 @@
     def factorial(n):
       # Your code here
       return |
+  modelSolution: |
+    factorial(n - 1) * n if n > 0 else 1
   wrapper: |
     {}
 
@@ -120,29 +130,33 @@
     def bogosort(lst):
       # Your code here
       |
+  modelSolution: |
+    while lst != sorted(lst):
+      shuffle(lst)
   wrapper: |
     {}
 
-    class ListWrapper(list):
-      def make_wrapper(f):
-        import inspect, functools
-        @functools.wraps(f)
-        def wrapper(self, *args, **kwargs):
+    def _wrap_list(lst):
+      import inspect
+      from collections.abc import MutableSequence
+      class list(MutableSequence):
+        def __getitem__(self, index):
+          return lst.__getitem__(index)
+        def __setitem__(self, index, value):
           if inspect.stack()[1].frame.f_code.co_qualname != "Random.shuffle":
             raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
-          return f(self, *args, **kwargs)
-        return wrapper
-
-      __setitem__ = make_wrapper(list.__setitem__)
-      __delitem__ = make_wrapper(list.__delitem__)
-      append = make_wrapper(list.append)
-      extend = make_wrapper(list.extend)
-      insert = make_wrapper(list.insert)
-      pop = make_wrapper(list.pop)
-      remove = make_wrapper(list.remove)
-      clear = make_wrapper(list.clear)
-      sort = make_wrapper(list.sort)
-      reverse = make_wrapper(list.reverse)
+          return lst.__setitem__(index, value)
+        def __delitem__(self, index):
+          raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
+        def insert(self, index, value):
+          raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
+        def __len__(self):
+          return lst.__len__()
+        def __str__(self):
+          return lst.__str__()
+        def __repr__(self):
+          return lst.__repr__()
+      return list()
 
     def _test():
       import random as _random
@@ -159,7 +173,7 @@
       print("=== END EXPECTED OUTPUT ===")
 
       for _lst in _lsts:
-        _wrapped = ListWrapper(_lst)
+        _wrapped = _wrap_list(_lst)
         bogosort(_wrapped)
         print("bogosort(" + str(_lst) + ") =", _wrapped)
 

@@ -24,6 +24,40 @@ GENERATED_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
 SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
 
+_SOLUTION_TOKEN_RE = re.compile(
+    r'"(?:[^"\\]|\\.)*"'
+    r"|'(?:[^'\\]|\\.)*'"
+    r"|[a-zA-Z_]\w*"
+    r"|[0-9]+(?:\.[0-9]+)?"
+    r"|[+\-*/%&|^~<>=!]+"
+    r"|[()[\]{},.:;@]"
+)
+
+
+def tokenize_solution(solution: str) -> tuple[list[str], list[list[str | int]]]:
+    """Tokenize a model solution into a token list and a line structure.
+
+    Returns:
+        tokens: flat list of token strings (words, operators, punctuation)
+        lines: one entry per line; each entry is a list of str (whitespace gaps)
+               or int (index into tokens)
+    """
+    tokens: list[str] = []
+    lines: list[list[str | int]] = []
+    for line in solution.splitlines():
+        parts: list[str | int] = []
+        last_end = 0
+        for m in _SOLUTION_TOKEN_RE.finditer(line):
+            if m.start() > last_end:
+                parts.append(line[last_end : m.start()])
+            parts.append(len(tokens))
+            tokens.append(m.group())
+            last_end = m.end()
+        if last_end < len(line):
+            parts.append(line[last_end:])
+        lines.append(parts)
+    return tokens, lines
+
 
 class LoginCmd(TypedDict):
     type: Literal["login"]
@@ -429,6 +463,8 @@ class Puzzle:
     template: str  # code template to start with
     start_pos: tuple[int, int]  # (col, row)
     wrapper: str  # wrapper to insert user code in with format(); must print expected output then SEPARATOR before running user code
+    solution_tokens: list[str] = field(default_factory=list[str])
+    solution_lines: list[list[str | int]] = field(default_factory=list[list[str | int]])
 
     def json(self) -> PuzzleJson:
         """Returns the puzzle data as JSON."""
@@ -639,10 +675,14 @@ class PlayerManager:
                 start_code = entry["template"].partition("|")[0]
                 start_row = start_code.count("\n")
                 start_col = len(start_code.rpartition("\n")[2])
+                raw_solution = entry.get("modelSolution", "").strip()
+                solution_tokens, solution_lines = tokenize_solution(raw_solution)
                 puzzle = Puzzle(
-                    **{k: v for k, v in entry.items() if k not in ("template", "start_pos")},
+                    **{k: v for k, v in entry.items() if k not in ("template", "start_pos", "modelSolution")},
                     template=entry["template"].replace("|", ""),
                     start_pos=(start_col, start_row),
+                    solution_tokens=solution_tokens,
+                    solution_lines=solution_lines,
                 )
                 puzzles[puzzle.id] = puzzle
         except Exception:
