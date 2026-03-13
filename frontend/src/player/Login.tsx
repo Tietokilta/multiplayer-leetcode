@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useReadLocalStorage } from "usehooks-ts";
 
 type Props = {
-  children: ReactNode;
+  children?: ReactNode;
   onConnect: (myId: string, serverIp: string) => void;
   error: string | null;
   storageKey?: string;

@@ -16,7 +16,7 @@ interface DebuffItem {
 export type Solution = (string | number)[][];
 
 type MinigameCmd =
-  | { type: "login"; id: string }
+  | { type: "login"; token: string }
   | { type: "submit"; solution: Solution }
   | { type: "assign"; target: string; award_idx: number };
 
@@ -44,40 +44,40 @@ type MinigameMsg =
 const MINIGAME_PORT = 6978;
 
 function useServerConfig_DEV() {
-  const [myId, setMyId] = useLocalStorage("minigame-player-id", "");
+  const [myToken, setMyToken] = useLocalStorage("minigame-my-id", "");
   const [serverIp, setServerIp] = useLocalStorage("minigame-server-ip", "");
   const [serverIpError, setServerIpError] = useLocalStorage("minigame-server-ip-error", "");
 
   return {
-    myId,
-    setMyId,
+    myToken,
+    setMyToken,
     serverIp,
     setServerIp,
     serverIpError,
     setServerIpError,
-    canConnect: !!myId && !!serverIp && !serverIpError,
+    canConnect: !!myToken && !!serverIp && !serverIpError,
   };
 }
 
 function useServerConfig_PROD() {
   const [serverIpError, setServerIpError] = useLocalStorage("minigame-prod-server-ip-error", "");
-  const myId = window.location.hash.slice(1);
+  const myToken = window.location.hash.slice(1);
 
   return {
-    myId,
-    setMyId: () => {},
+    myToken,
+    setMyToken: () => {},
     serverIp: window.location.hostname,
     setServerIp: () => {},
     serverIpError,
     setServerIpError,
-    canConnect: !!myId,
+    canConnect: !!myToken,
   };
 }
 
 const useServerConfig = import.meta.env.PROD ? useServerConfig_PROD : useServerConfig_DEV;
 
 export default function MinigameApp() {
-  const { myId, setMyId, serverIp, setServerIp, serverIpError, setServerIpError, canConnect } = useServerConfig();
+  const { myToken, setMyToken, serverIp, setServerIp, serverIpError, setServerIpError, canConnect } = useServerConfig();
 
   const serverRef = useRef(new GameServerHandler<MinigameCmd, MinigameMsg>());
   const [connState, setConnState] = useState<ConnState>("not");
@@ -138,12 +138,12 @@ export default function MinigameApp() {
     if (!canConnect) return;
     const server = serverRef.current;
     setServerIpError("");
-    server.connect(serverIp, { type: "login", id: myId }, MINIGAME_PORT);
+    server.connect(serverIp, { type: "login", token: myToken }, MINIGAME_PORT);
     return () => {
       server.disconnect();
       setPlayerName(null);
     };
-  }, [canConnect, serverIp, myId, setServerIpError]);
+  }, [canConnect, serverIp, myToken, setServerIpError]);
 
   const connIndicator = (
     <div className={`self-end z-101 flex items-center gap-2 text-xs bg-gray-900`}>
@@ -153,7 +153,7 @@ export default function MinigameApp() {
           onClick={() => {
             serverRef.current.disconnect();
             setServerIp("");
-            setMyId("");
+            setMyToken("");
           }}
         >
           Disconnect
@@ -170,17 +170,18 @@ export default function MinigameApp() {
 
   if (!canConnect && !import.meta.env.PROD) {
     return (
-      <Login
-        storageKey="minigame"
-        onConnect={(id, ip) => {
-          setMyId(id);
-          setServerIp(ip);
-          setServerIpError("");
-        }}
-        error={serverIpError || null}
-      >
+      <div className="flex flex-col h-screen p-2 gap-4">
         {connIndicator}
-      </Login>
+        <Login
+          storageKey="minigame"
+          onConnect={(token, ip) => {
+            setMyToken(token);
+            setServerIp(ip);
+            setServerIpError("");
+          }}
+          error={serverIpError || null}
+        />
+      </div>
     );
   }
 

@@ -8,12 +8,15 @@ from dataclasses import dataclass, field
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os import environ
 from typing import Annotated, Any, Literal, TypedDict
+
+import jwt
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from websockets import ServerConnection, WebSocketException, serve
 
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+MINIGAME_JWT_SECRET = environ.get("MINIGAME_JWT_SECRET")
 PORT = int(environ.get("PORT", "6978"))
 ATTEMPT_RATE_LIMIT = 5.0  # seconds between attempts per minigame player
 
@@ -40,7 +43,7 @@ class PuzzleActivatedCmd(BaseModel):
 
 class LoginCmd(BaseModel):
     type: Literal["login"]
-    id: str
+    token: str
 
 
 class SubmitCmd(BaseModel):
@@ -430,7 +433,23 @@ class MinigameServer:
             await ws.close()
             return
 
-        await self.handle_player(ws, login.id)
+        try:
+            payload = jwt.decode(  # pyright: ignore[reportUnknownMemberType]
+                login.token, MINIGAME_JWT_SECRET, algorithms=["HS256"]
+            )
+            player_id: str = payload["sub"]
+        except jwt.InvalidTokenError as e:
+            log.warning(f"Invalid JWT from player: {e}")
+            await send(ws, ErrorMessage(type="error", message="invalid token"))
+            await ws.close()
+            return
+        except KeyError:
+            log.warning("JWT missing 'sub' claim")
+            await send(ws, ErrorMessage(type="error", message="invalid token"))
+            await ws.close()
+            return
+
+        await self.handle_player(ws, player_id)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -454,6 +473,8 @@ async def main() -> None:
 if __name__ == "__main__":
     if not ADMIN_PASSWORD:
         raise RuntimeError("ADMIN_PASSWORD environment variable not set")
+    if not MINIGAME_JWT_SECRET:
+        raise RuntimeError("MINIGAME_JWT_SECRET environment variable not set")
     basicConfig(level=INFO, format="%(asctime)s %(levelname)s %(message)s")
     if environ.get("DEBUG"):
         log.setLevel(DEBUG)
