@@ -20,7 +20,7 @@ import { fireCharConfetti, fireConfettiAt, fireConfettiAtCursor, fireEmojiConfet
 
 export type ActiveDebuff = {
   name: Debuff;
-  type: string;
+  debuff_type: string;
   strength: number;
   duration: number;
   endTime: number; // Date.now() + duration * 1000
@@ -67,7 +67,7 @@ const example = `function twoSum(nums: number[], target: number): number[] {
 function debuffToActiveDebuff(debuff: DebuffItem, now: number): ActiveDebuff {
   return {
     name: debuff.name,
-    type: debuff.type,
+    debuff_type: debuff.debuff_type,
     strength: debuff.strength,
     duration: debuff.duration * 1000,
     endTime: now + debuff.duration * 1000,
@@ -77,8 +77,8 @@ function debuffToActiveDebuff(debuff: DebuffItem, now: number): ActiveDebuff {
 function filterActiveDebuffs(debuffs: ActiveDebuff[]) {
   const seen = new Set<string>();
   return debuffs.filter((d) => {
-    if (seen.has(d.type)) return false;
-    seen.add(d.type);
+    if (seen.has(d.debuff_type)) return false;
+    seen.add(d.debuff_type);
     return true;
   });
 }

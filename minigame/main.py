@@ -26,7 +26,7 @@ ATTEMPT_RATE_LIMIT = 5.0  # seconds between attempts per minigame player
 
 class DebuffModel(BaseModel):
     name: str
-    type: str
+    debuff_type: str
     strength: float
     duration: float
 
@@ -139,6 +139,7 @@ class MinigamePlayer:
     ws: ServerConnection
     last_attempt: float = 0.0
     earned_award_idx: int | None = None
+    award_used: bool = False
 
 
 @dataclass
@@ -230,6 +231,7 @@ class MinigameServer:
 
         for player in self.players.values():
             player.earned_award_idx = None
+            player.award_used = False
             player.last_attempt = 0.0
 
         await self.broadcast(
@@ -339,6 +341,10 @@ class MinigameServer:
             await send(player.ws, ErrorMessage(type="error", message="already earned an award this puzzle"))
             return
 
+        if player.award_used:
+            await send(player.ws, ErrorMessage(type="error", message="already used your award this puzzle"))
+            return
+
         ps = self.puzzle_state
 
         if cmd.solution != ps.correct_solution:
@@ -388,6 +394,7 @@ class MinigameServer:
 
         award = ps.awards[award_idx]
         player.earned_award_idx = None
+        player.award_used = True
         ps.debuffs_by_player[target].append(award)
 
         await send(player.ws, AssignedMessage(type="assigned", target=target))
@@ -401,7 +408,7 @@ class MinigameServer:
                         type="administer_debuff",
                         player=target,
                         name=award.name,
-                        debuff_type=award.type,
+                        debuff_type=award.debuff_type,
                         strength=award.strength,
                         duration=award.duration,
                     ),

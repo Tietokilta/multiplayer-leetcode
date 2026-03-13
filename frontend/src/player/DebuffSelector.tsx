@@ -47,9 +47,9 @@ export function DebuffSelector({
     evt.currentTarget.blur();
     server.send({
       type: "administer_debuff",
-      players: selectedPlayer === "*" ? (players ?? []) : [selectedPlayer],
+      players: [selectedPlayer],
       name: selectedName,
-      debuff_type: info.type,
+      debuff_type: info.debuff_type,
       strength,
       duration: duration === 120 ? 0 : duration,
     });

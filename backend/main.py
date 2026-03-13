@@ -26,8 +26,6 @@ MINIGAME_BACKEND = environ.get("MINIGAME_BACKEND")
 OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
 SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
 
-MINIGAME_AWARDS: list["MinigameAward"] = []
-
 _SOLUTION_TOKEN_RE = re.compile(
     r'"(?:[^"\\]|\\.)*"'
     r"|'(?:[^'\\]|\\.)*'"
@@ -118,9 +116,11 @@ class AdminDebuffCmd(TypedDict):
     duration: float
 
 
-class MinigameAward(TypedDict):
+class PreparedDebuff(TypedDict):
+    """A debuff prepared for launch_round, matching the frontend PreparedDebuff shape."""
+
     name: str
-    type: str
+    debuff_type: str
     strength: float
     duration: float
 
@@ -128,7 +128,7 @@ class MinigameAward(TypedDict):
 class MinigamePuzzleActivated(TypedDict):
     type: Literal["puzzle_activated"]
     players: list[str]
-    awards: list[MinigameAward]
+    awards: list[PreparedDebuff]
     tokens: list[str]
     solution_lines: list[list[str | int]]
     correct_solution: list[list[str | int]]
@@ -152,13 +152,26 @@ class DebuffStateCmd(TypedDict):
     payload: object
 
 
+class AdminClearDebuffCmd(TypedDict):
+    type: Literal["clear_debuff"]
+    players: list[str]
+    name: str | None
+
+
+class AdminLaunchRoundCmd(TypedDict):
+    type: Literal["launch_round"]
+    puzzle: str
+    initial_debuffs: list[PreparedDebuff]
+    awards: list[PreparedDebuff]
+
+
 class AssignIdCmd(TypedDict):
     type: Literal["assign_id"]
     generated_id: str
     player: str
 
 
-type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | DebuffStateCmd | AssignIdCmd
+type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | AdminClearDebuffCmd | AdminLaunchRoundCmd | DebuffStateCmd | AssignIdCmd
 
 
 class WelcomeMessage(TypedDict):
@@ -255,7 +268,7 @@ class SpectateOutputMessage(TypedDict):
 
 class DebuffItem(TypedDict):
     name: str
-    type: str
+    debuff_type: str
     strength: float
     duration: float  # remaining seconds from now
 
@@ -457,7 +470,7 @@ class Player:
             "debuffs": [
                 {
                     "name": d.name,
-                    "type": d.debuff_type,
+                    "debuff_type": d.debuff_type,
                     "strength": d.strength,
                     "duration": d.start + d.duration - now,
                 }
@@ -581,7 +594,11 @@ class PlayerManager:
         return player
 
     async def switch_puzzle(
-        self, id: str, reset_editors: bool = True, expire_submissions: bool = False
+        self,
+        id: str,
+        reset_editors: bool = True,
+        expire_submissions: bool = False,
+        awards: list[PreparedDebuff] | None = None,
     ) -> ActionError | None:
         """Changes the current puzzle to the given one.
 
@@ -589,6 +606,7 @@ class PlayerManager:
             id: The puzzle ID to switch to.
             reset_editors: If True, reset all player editors to the puzzle template.
                            If False, only send updated puzzle info without resetting editors.
+            awards: A list of debuffs to be awarded during the round.
         """
         if id not in self.puzzles:
             return {"type": "error", "message": "No such puzzle"}
@@ -624,8 +642,9 @@ class PlayerManager:
         # Synchronously update state (no further awaits)
         self.current_puzzle = puzzle
         self.broadcast_to_admins(self.get_puzzle_list())
+        # TODO: Make reloading a puzzle not destroy the awards on the minigame server.
         if MINIGAME_BACKEND:
-            self.notify_minigame_puzzle()
+            self.notify_minigame_puzzle(awards or [])
         self.submissions.clear()
         for row in existing_submissions:
             if row[0] in self.players:
@@ -959,7 +978,8 @@ class PlayerManager:
         """Administers a debuff to the listed players. Duration stacks with existing same-type debuffs."""
         now = time.monotonic()
         found_any = False
-        for player_name in cmd["players"]:
+        effective_players = list(self.players.keys()) if "*" in cmd["players"] else cmd["players"]
+        for player_name in effective_players:
             player = self.players.get(player_name)
             if not player:
                 continue
@@ -989,7 +1009,7 @@ class PlayerManager:
                 "debuffs": [
                     {
                         "name": cmd["name"],
-                        "type": cmd["debuff_type"],
+                        "debuff_type": cmd["debuff_type"],
                         "strength": cmd["strength"],
                         "duration": duration,
                     }
@@ -1021,7 +1041,7 @@ class PlayerManager:
             player.send(remaining)
             self.notify_spectators(player_name, remaining)
 
-    def notify_minigame_puzzle(self) -> None:
+    def notify_minigame_puzzle(self, awards: list[PreparedDebuff]) -> None:
         """Buffer the current puzzle for the minigame backend and wake the sender."""
         puzzle = self.current_puzzle
         if not puzzle or not puzzle.solution_tokens:
@@ -1029,7 +1049,7 @@ class PlayerManager:
         self.minigame_puzzle_buf = MinigamePuzzleActivated(
             type="puzzle_activated",
             players=list(self.players.keys()),
-            awards=MINIGAME_AWARDS,
+            awards=awards,
             tokens=puzzle.solution_tokens,
             solution_lines=puzzle.solution_lines,
             correct_solution=puzzle.correct_solution,
@@ -1165,21 +1185,30 @@ async def ws_handler(
                     elif msg["type"] == "clear_debuff":
                         player_names = msg.get("players")
                         name = msg.get("name")
-                        targets = list(manager.players.keys()) if player_names == "all" else player_names
+                        targets = list(manager.players.keys()) if "*" in player_names else player_names
                         for player_name in targets:
                             manager.clear_debuff(player_name, name)
                     elif msg["type"] == "launch_round":
                         puzzle_id = msg["puzzle"]
-                        initial_debuffs = msg.get("initial_debuffs", [])
+                        initial_debuffs = msg["initial_debuffs"]
+                        awards = msg["awards"]
                         log.info(
-                            f"Admin launching round with puzzle {puzzle_id}, {len(initial_debuffs)} initial debuffs"
+                            f"Admin launching round with puzzle {puzzle_id}, {len(initial_debuffs)} initial debuffs, {len(awards)} awards"
                         )
-                        if error := await manager.switch_puzzle(puzzle_id, expire_submissions=True):
+                        if error := await manager.switch_puzzle(puzzle_id, expire_submissions=True, awards=awards):
                             await send(ws, error)
                         else:
                             for debuff_cmd in initial_debuffs:
-                                debuff_cmd["players"] = list(manager.players.keys())
-                                manager.administer_debuff(debuff_cmd)
+                                manager.administer_debuff(
+                                    AdminDebuffCmd(
+                                        type="administer_debuff",
+                                        players=["*"],
+                                        name=debuff_cmd["name"],
+                                        debuff_type=debuff_cmd["debuff_type"],
+                                        strength=debuff_cmd["strength"],
+                                        duration=debuff_cmd["duration"],
+                                    )
+                                )
                     elif msg["type"] == "assign_id":
                         generated_id = msg["generated_id"]
                         player_name = msg["player"]

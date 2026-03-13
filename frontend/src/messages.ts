@@ -16,7 +16,7 @@ export type PlayerCmd =
 
 export type DebuffItem = {
   name: Debuff;
-  type: string;
+  debuff_type: string;
   strength: number;
   duration: number; // remaining seconds from now
 };

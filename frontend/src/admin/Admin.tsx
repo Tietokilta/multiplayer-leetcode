@@ -244,7 +244,7 @@ export default function Admin() {
           {players.length > 0 && <DebuffSelector server={server} players={players} />}
           <ActiveDebuffsPanel players={players} getController={getController} server={server} />
         </div>
-        <NextRoundPanel server={server} puzzles={puzzles} players={players} currentPuzzle={currentPuzzle} />
+        <NextRoundPanel server={server} puzzles={puzzles} currentPuzzle={currentPuzzle} />
       </div>
 
       {/* Spectate Views */}
