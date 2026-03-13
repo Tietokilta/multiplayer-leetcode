@@ -20,6 +20,7 @@ from yaml import safe_load
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+INFINITE_DURATION = 86400 * 365  # sentinel: duration=0 from client means "infinite"
 GENERATED_ID_RE = re.compile(r"^[0-9a-f]{12}$")
 MINIGAME_BACKEND = environ.get("MINIGAME_BACKEND")
 OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
@@ -649,6 +650,11 @@ class PlayerManager:
                     player.col = puzzle.start_pos[0]
                     player.row = puzzle.start_pos[1]
                 self.unsaved.add(player.name)
+            # Clear all active debuffs on puzzle switch
+            player.debuffs = []
+            clear: DebuffMessage = {"type": "debuffs", "debuffs": []}
+            player.send(clear)
+            self.notify_spectators(player.name, clear)
             player.send(puzzle.json())
             if reset_editors:
                 player.send(player.editor_json())
@@ -833,7 +839,7 @@ class PlayerManager:
 
         data = json.dumps(converted)
         for admin in self.admins.values():
-            if converted["type"] == "spectate_state" or admin.is_spectating(player_name):
+            if converted["type"] in ("spectate_state", "spectate_debuffs") or admin.is_spectating(player_name):
                 try:
                     # TODO: use queue tasks like with players
                     asyncio.create_task(admin.ws.send(data, True))
@@ -966,7 +972,8 @@ class PlayerManager:
             # Find longest remaining duration of same-type debuffs to stack with
             same_type = [d for d in player.debuffs if d.debuff_type == cmd["debuff_type"]]
             extra = max((d.start + d.duration - now for d in same_type), default=0.0)
-            duration = cmd["duration"] + extra
+            cmd_duration = INFINITE_DURATION if cmd["duration"] == 0 else cmd["duration"]
+            duration = cmd_duration + extra
             # Administer new debuff
             player.debuffs.append(
                 Debuff(
@@ -996,6 +1003,23 @@ class PlayerManager:
         if not found_any:
             return {"type": "error", "message": "No such player"}
         return None
+
+    def clear_debuff(self, player_name: str, name: str | None) -> None:
+        """Clears debuffs for a player. name=None clears all, otherwise clears by debuff name."""
+        if player_name not in self.players:
+            return
+        player = self.players[player_name]
+        if name is None:
+            player.debuffs = []
+        else:
+            player.debuffs = [d for d in player.debuffs if d.name != name]
+        clear: DebuffMessage = {"type": "debuffs", "debuffs": []}
+        player.send(clear)
+        self.notify_spectators(player_name, clear)
+        if player.debuffs:
+            remaining = player.debuffs_json()
+            player.send(remaining)
+            self.notify_spectators(player_name, remaining)
 
     def notify_minigame_puzzle(self) -> None:
         """Buffer the current puzzle for the minigame backend and wake the sender."""
@@ -1138,6 +1162,24 @@ async def ws_handler(
                     elif msg["type"] == "administer_debuff":
                         if error := manager.administer_debuff(msg):
                             await send(ws, error)
+                    elif msg["type"] == "clear_debuff":
+                        player_names = msg.get("players")
+                        name = msg.get("name")
+                        targets = list(manager.players.keys()) if player_names == "all" else player_names
+                        for player_name in targets:
+                            manager.clear_debuff(player_name, name)
+                    elif msg["type"] == "launch_round":
+                        puzzle_id = msg["puzzle"]
+                        initial_debuffs = msg.get("initial_debuffs", [])
+                        log.info(
+                            f"Admin launching round with puzzle {puzzle_id}, {len(initial_debuffs)} initial debuffs"
+                        )
+                        if error := await manager.switch_puzzle(puzzle_id, expire_submissions=True):
+                            await send(ws, error)
+                        else:
+                            for debuff_cmd in initial_debuffs:
+                                debuff_cmd["players"] = list(manager.players.keys())
+                                manager.administer_debuff(debuff_cmd)
                     elif msg["type"] == "assign_id":
                         generated_id = msg["generated_id"]
                         player_name = msg["player"]
@@ -1190,6 +1232,10 @@ async def ws_handler(
                         await send(ws, manager.get_puzzle_list())
                         await send(ws, manager.get_player_list())
                         await send(ws, manager.get_pending_logins_msg())
+                        # Send current debuffs for all players
+                        for name, p in manager.players.items():
+                            p_debuffs = p.debuffs_json()
+                            await send(ws, {**p_debuffs, "type": "spectate_debuffs", "player": name})
                         # Send current submission state for all players
                         for name, sub in manager.submissions.items():
                             await send(

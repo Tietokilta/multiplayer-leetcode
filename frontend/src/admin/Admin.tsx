@@ -2,7 +2,9 @@ import { useState } from "react";
 import { stateColors } from "../connection";
 import { DebuffSelector } from "../player/DebuffSelector";
 import { useAdminState } from "./adminState";
+import { ActiveDebuffsPanel } from "./ActiveDebuffsPanel";
 import { AdminLogin } from "./AdminLogin";
+import { NextRoundPanel } from "./NextRoundPanel";
 import { PlayerCard } from "./PlayerCard";
 import type { SpectatorController } from "./SpectatorController";
 import { submissionColors } from "./submissionColors";
@@ -237,11 +239,13 @@ export default function Admin() {
         </div>
       </div>
 
-      {players.length > 0 && (
-        <div className="mb-6">
-          <DebuffSelector server={server} players={players} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 items-start">
+        <div className="flex flex-col gap-4">
+          {players.length > 0 && <DebuffSelector server={server} players={players} />}
+          <ActiveDebuffsPanel players={players} getController={getController} server={server} />
         </div>
-      )}
+        <NextRoundPanel server={server} puzzles={puzzles} players={players} currentPuzzle={currentPuzzle} />
+      </div>
 
       {/* Spectate Views */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

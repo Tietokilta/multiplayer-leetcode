@@ -14,7 +14,11 @@ export type AdminCmd =
   | { type: "remove_player"; name: string }
   | { type: "reload_puzzles" }
   | { type: "assign_id"; generated_id: string; player: string }
-  | { type: "administer_debuff"; players: string[]; name: string; debuff_type: string; strength: number; duration: number };
+  | { type: "administer_debuff"; players: string[]; name: string; debuff_type: string; strength: number; duration: number }
+  | { type: "launch_round"; puzzle: string; initial_debuffs: PreparedDebuff[] }
+  | { type: "clear_debuff"; players: string[] | "all"; name: string | null };
+
+export type PreparedDebuff = { name: string; debuff_type: string; strength: number; duration: number };
 
 export type AdminMessage =
   | { type: "admin_welcome" }

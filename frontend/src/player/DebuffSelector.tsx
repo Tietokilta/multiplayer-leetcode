@@ -47,11 +47,11 @@ export function DebuffSelector({
     evt.currentTarget.blur();
     server.send({
       type: "administer_debuff",
-      players: [selectedPlayer],
+      players: selectedPlayer === "*" ? (players ?? []) : [selectedPlayer],
       name: selectedName,
       debuff_type: info.type,
       strength,
-      duration,
+      duration: duration === 120 ? 0 : duration,
     });
   }
 
@@ -65,6 +65,7 @@ export function DebuffSelector({
             onChange={(e) => setSelectedPlayer(e.target.value)}
             className="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white"
           >
+            <option value="*">All players</option>
             {players.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -89,7 +90,7 @@ export function DebuffSelector({
         </div>
 
         <label className="flex flex-col gap-1">
-          <span>Duration: {duration}s</span>
+          <span>Duration: {duration === 120 ? "∞" : `${duration}s`}</span>
           <input
             type="range"
             min={0}
