@@ -32,11 +32,11 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
     }
   }
 
-  connect(ip: string, loginCmd: TCmd) {
+  connect(ip: string, loginCmd: TCmd, port: number = 6979) {
     console.log("Connecting to game server at", ip);
     this.handleState?.("connecting");
     this.active = true;
-    this.socket = new WebSocket(`ws://${ip}:6979/`);
+    this.socket = new WebSocket(`ws://${ip}:${port}/`);
 
     this.socket.addEventListener("open", () => {
       console.log("Game server connection opened");
@@ -83,7 +83,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
         this.socket = null;
         if (this.active) {
           console.log("Attempting to reconnect to game server in 1000ms...");
-          this.timeout = window.setTimeout(() => this.connect(ip, loginCmd), 1000);
+          this.timeout = window.setTimeout(() => this.connect(ip, loginCmd, port), 1000);
         }
       }
     });
@@ -91,9 +91,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
 
   protected onOpen(loginCmd: TCmd) {
     // Send login command
-    if (loginCmd) {
-      this.socket!.send(JSON.stringify(loginCmd));
-    }
+    this.socket!.send(JSON.stringify(loginCmd));
   }
 
   protected onLogin() {

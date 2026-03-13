@@ -115,8 +115,8 @@ export abstract class AbstractPlayerController<State extends BasePlayerState = B
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected debuffEnded(ended: ActiveDebuff): void {}
+  protected debuffEnded(ended: ActiveDebuff): void;
+  protected debuffEnded(): void {}
 
   protected updateDebuffs(newDebuffs: DebuffItem[] | false) {
     const now = Date.now();

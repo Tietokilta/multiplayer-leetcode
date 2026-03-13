@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from logging import DEBUG, INFO, basicConfig, getLogger
 from os import environ
 from typing import Annotated, Any, Literal, TypedDict
-
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError
 from websockets import ServerConnection, WebSocketException, serve
 
@@ -35,6 +34,11 @@ class PuzzleActivatedCmd(BaseModel):
     awards: list[DebuffModel]
     tokens: list[str]
     correct_solution: list[list[str | int]]
+
+
+class LoginCmd(BaseModel):
+    type: Literal["login"]
+    id: str
 
 
 class SubmitCmd(BaseModel):
@@ -94,12 +98,17 @@ class LimitReachedMessage(TypedDict):
     target: str
 
 
+class WelcomeMessage(TypedDict):
+    type: Literal["welcome"]
+    player_id: str
+
+
 class ErrorMessage(TypedDict):
     type: Literal["error"]
     message: str
 
 
-type MessageOut = PuzzleMessage | FeedbackMessage | AwardMessage | AwardGrantedMessage | DebuffAssignedMessage | AssignedMessage | LimitReachedMessage | ErrorMessage
+type MessageOut = PuzzleMessage | FeedbackMessage | AwardMessage | AwardGrantedMessage | DebuffAssignedMessage | AssignedMessage | LimitReachedMessage | WelcomeMessage | ErrorMessage
 
 
 class AdministerDebuffCmd(TypedDict):
@@ -247,6 +256,14 @@ class MinigameServer:
         self.players[player_id] = player
 
         try:
+            await send(
+                ws,
+                WelcomeMessage(
+                    type="welcome",
+                    player_id=player_id,
+                ),
+            )
+
             if self.puzzle_state is not None:
                 ps = self.puzzle_state
                 await send(
@@ -397,14 +414,18 @@ class MinigameServer:
             await self.handle_main_game(ws)
             return
 
-        player_id = ws.request.headers.get("X-Player-ID", "")
-        if not player_id:
-            log.warning("Player connected without X-Player-ID header")
-            await send(ws, ErrorMessage(type="error", message="missing X-Player-ID header"))
+        # Wait for login message
+        try:
+            raw = await anext(aiter(ws))
+            msg = json.loads(raw)
+            login = LoginCmd.model_validate(msg)
+        except (StopAsyncIteration, ValidationError, json.JSONDecodeError):
+            log.warning("Player disconnected or sent invalid login")
+            await send(ws, ErrorMessage(type="error", message="expected login message"))
             await ws.close()
             return
 
-        await self.handle_player(ws, player_id)
+        await self.handle_player(ws, login.id)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
