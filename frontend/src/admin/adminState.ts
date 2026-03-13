@@ -62,7 +62,7 @@ export function useAdminState({ spectateAll = false }: Options) {
     setError(null);
 
     server.handleState = setConnState;
-    server.handleLogin = setLoggedIn;
+    server.handleLogin = (welcome) => setLoggedIn(!!welcome);
     server.handleLoginError = setLoginError;
     server.handleMessage = (data) => {
       switch (data.type) {

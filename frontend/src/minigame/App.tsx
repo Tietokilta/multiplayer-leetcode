@@ -10,7 +10,7 @@ type MinigameCmd =
   | { type: "assign"; target: string; award_idx: number };
 
 type MinigameMsg =
-  | { type: "welcome"; player_id: string }
+  | { type: "welcome"; name: string }
   | { type: "puzzle"; tokens: string[]; solution_lines: (string | number)[][]; players: string[] }
   | { type: "correct" }
   | { type: "incorrect" }
@@ -61,11 +61,12 @@ export default function MinigameApp() {
 
   const serverRef = useRef(new GameServerHandler<MinigameCmd, MinigameMsg>());
   const [connState, setConnState] = useState<ConnState>("not");
-  const [welcome, setWelcome] = useState<Extract<MinigameMsg, { type: "welcome" }> | null>(null);
+  const [playerName, setPlayerName] = useState<string | null>(null);
 
   useEffect(() => {
     const server = serverRef.current;
     server.handleState = setConnState;
+    server.handleLogin = (welcome) => welcome && setPlayerName(welcome.name);
     server.handleLoginError = setServerIpError;
     server.handleMessage = (msg) => {
       console.log("minigame message:", msg);
@@ -79,16 +80,30 @@ export default function MinigameApp() {
     server.connect(serverIp, { type: "login", id: myId }, MINIGAME_PORT);
     return () => {
       server.disconnect();
-      setWelcome(null);
+      setPlayerName(null);
     };
   }, [canConnect, serverIp, myId, setServerIpError]);
 
   const connIndicator = (
-    <div className="flex items-center gap-2 text-sm">
+    <div className={`self-end z-101 flex items-center gap-2 text-xs bg-gray-900`}>
+      {!import.meta.env.PROD && canConnect && (
+        <button
+          className="border rounded px-3 text-sm text-gray-400"
+          onClick={() => {
+            serverRef.current.disconnect();
+            setServerIp("");
+            setMyId("");
+          }}
+        >
+          Disconnect
+        </button>
+      )}
+      {connState === "connected"
+        ? (playerName ?? "Connected")
+        : connState === "connecting"
+          ? "Connecting\u2026"
+          : "Disconnected"}
       <span className={`w-3 h-3 rounded-full inline-block ${stateColors[connState]}`} />
-      <span>
-        {connState === "connected" ? "Connected" : connState === "connecting" ? "Connecting\u2026" : "Disconnected"}
-      </span>
     </div>
   );
 
@@ -109,27 +124,9 @@ export default function MinigameApp() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-      <h1 className="text-3xl font-bold">Audience Minigames</h1>
+    <div className="flex flex-col h-screen p-2 gap-4">
       {connIndicator}
-      {serverIpError && <div className="text-red-500 text-sm">{serverIpError}</div>}
-      {welcome && (
-        <div className="text-sm text-gray-300">
-          Welcome, <span className="font-semibold text-white">{welcome.player_id}</span>!
-        </div>
-      )}
-      {!import.meta.env.PROD && (
-        <button
-          className="border rounded px-3 py-1 text-sm text-gray-400"
-          onClick={() => {
-            serverRef.current.disconnect();
-            setServerIp("");
-            setMyId("");
-          }}
-        >
-          Disconnect
-        </button>
-      )}
+      <div>TODO</div>
     </div>
   );
 }

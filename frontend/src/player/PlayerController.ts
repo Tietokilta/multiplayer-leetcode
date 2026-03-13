@@ -45,6 +45,7 @@ export type BasePlayerState = {
 export type PlayerState = BasePlayerState & {
   connected: ConnState;
   hasBeenConnected: boolean;
+  playerName: string | null;
 
   keyboardConnected: ConnState;
   currentKeyboard: string | undefined;
@@ -179,7 +180,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
   constructor() {
     super();
     this.server.handleState = (state) => this.update({ connected: state });
-    this.server.handleLogin = (success: boolean) => success && this.update({ hasBeenConnected: true });
+    this.server.handleLogin = (welcome) => welcome && this.update({ hasBeenConnected: true, playerName: welcome.name });
     this.server.handleMessage = (data) => this.handleMessage(data);
     this.keyboardServer.handleState = (state) => this.update({ keyboardConnected: state });
     this.keyboardServer.handleMessage = (msg) => this.handleKeyboardMessage(msg);
@@ -189,6 +190,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
     return {
       connected: "not",
       hasBeenConnected: false,
+      playerName: null,
 
       rendered: this.editor.render(new Set()), // Initial render without debuffs
       puzzle: null,

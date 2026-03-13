@@ -124,7 +124,12 @@ type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | A
 
 
 class WelcomeMessage(TypedDict):
-    type: Literal["welcome"] | Literal["admin_welcome"]
+    type: Literal["welcome"]
+    name: str
+
+
+class AdminWelcomeMessage(TypedDict):
+    type: Literal["admin_welcome"]
 
 
 class CodeRunOutput(TypedDict):
@@ -240,7 +245,7 @@ class PendingLoginsMessage(TypedDict):
     ids: list[str]
 
 
-type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage | PendingLoginsMessage
+type WsMessage = WelcomeMessage | AdminWelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage | PendingLoginsMessage
 
 
 LLM_MODEL = "openai/gpt-5.3-codex"
@@ -1097,7 +1102,7 @@ async def ws_handler(
                         break  # just dump the connection
                     player = player_or_err
                     log.info(f"Player logged in: {name}")
-                    await send(ws, {"type": "welcome"})
+                    await send(ws, {"type": "welcome", "name": player.name})
                     # Send current puzzle, if any
                     if puzzle := manager.current_puzzle:
                         await send(ws, puzzle.json())

@@ -100,7 +100,7 @@ class LimitReachedMessage(TypedDict):
 
 class WelcomeMessage(TypedDict):
     type: Literal["welcome"]
-    player_id: str
+    name: str
 
 
 class ErrorMessage(TypedDict):
@@ -260,7 +260,7 @@ class MinigameServer:
                 ws,
                 WelcomeMessage(
                     type="welcome",
-                    player_id=player_id,
+                    name=player_id,
                 ),
             )
 
