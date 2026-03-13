@@ -33,7 +33,9 @@ class PuzzleActivatedCmd(BaseModel):
     players: list[str]
     awards: list[DebuffModel]
     tokens: list[str]
+    solution_lines: list[list[str | int]]
     correct_solution: list[list[str | int]]
+    template: str
 
 
 class LoginCmd(BaseModel):
@@ -64,6 +66,8 @@ class PuzzleMessage(TypedDict):
     tokens: list[str]
     solution_lines: list[list[str | int]]
     players: list[str]
+    num_awards: int
+    template: str
 
 
 class FeedbackMessage(TypedDict):
@@ -137,10 +141,11 @@ class MinigamePlayer:
 @dataclass
 class PuzzleState:
     tokens: list[str]
-    solution_lines_blank: list[list[str | int]]
+    solution_lines: list[list[str | int]]
     correct_solution: list[list[str | int]]
     awards: list[DebuffModel]
     main_game_players: list[str]
+    template: str
     next_award_idx: int = 0
     debuffs_by_player: dict[str, list[DebuffModel]] = field(default_factory=dict[str, list[DebuffModel]])
 
@@ -155,10 +160,6 @@ class PuzzleState:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-
-def blank_solution(lines: list[list[str | int]]) -> list[list[str | int]]:
-    return [[-1 if isinstance(item, int) else item for item in line] for line in lines]
 
 
 async def send(ws: ServerConnection, message: MessageOut | MainGameCmd) -> None:
@@ -214,13 +215,13 @@ class MinigameServer:
             log.info("Main game server disconnected")
 
     async def on_puzzle_activated(self, cmd: PuzzleActivatedCmd) -> None:
-        correct = cmd.correct_solution
         self.puzzle_state = PuzzleState(
             tokens=cmd.tokens,
-            solution_lines_blank=blank_solution(correct),
-            correct_solution=correct,
+            solution_lines=cmd.solution_lines,
+            correct_solution=cmd.correct_solution,
             awards=cmd.awards,
             main_game_players=cmd.players,
+            template=cmd.template,
             debuffs_by_player={p: [] for p in cmd.players},
         )
 
@@ -232,8 +233,10 @@ class MinigameServer:
             PuzzleMessage(
                 type="puzzle",
                 tokens=self.puzzle_state.tokens,
-                solution_lines=self.puzzle_state.solution_lines_blank,
+                solution_lines=self.puzzle_state.solution_lines,
                 players=self.puzzle_state.main_game_players,
+                num_awards=len(self.puzzle_state.awards),
+                template=self.puzzle_state.template,
             )
         )
         log.info(
@@ -271,8 +274,10 @@ class MinigameServer:
                     PuzzleMessage(
                         type="puzzle",
                         tokens=ps.tokens,
-                        solution_lines=ps.solution_lines_blank,
+                        solution_lines=ps.solution_lines,
                         players=ps.main_game_players,
+                        num_awards=len(ps.awards),
+                        template=ps.template,
                     ),
                 )
                 for i in range(ps.next_award_idx):

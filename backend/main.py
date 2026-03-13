@@ -14,15 +14,18 @@ from typing import AsyncGenerator, Literal, Never, NotRequired, TypedDict, cast
 import aiosqlite
 from inotify_simple import Event as InotifyEvent, INotify, flags
 from openrouter import OpenRouter
-from websockets import ServerConnection, WebSocketException, serve
+from websockets import ClientConnection, ConnectionClosed, ServerConnection, WebSocketException, connect, serve
 from yaml import safe_load
 
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
 GENERATED_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+MINIGAME_BACKEND = environ.get("MINIGAME_BACKEND")
 OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
 SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
+
+MINIGAME_AWARDS: list["MinigameAward"] = []
 
 _SOLUTION_TOKEN_RE = re.compile(
     r'"(?:[^"\\]|\\.)*"'
@@ -34,7 +37,7 @@ _SOLUTION_TOKEN_RE = re.compile(
 )
 
 
-def tokenize_solution(solution: str) -> tuple[list[str], list[list[str | int]]]:
+def tokenize_solution(solution: str) -> tuple[list[str], list[list[str | int]], list[list[str | int]]]:
     """Tokenize a model solution into a token list and a line structure.
 
     Returns:
@@ -44,19 +47,25 @@ def tokenize_solution(solution: str) -> tuple[list[str], list[list[str | int]]]:
     """
     tokens: list[str] = []
     lines: list[list[str | int]] = []
+    correct: list[list[str | int]] = []
     for line in solution.splitlines():
-        parts: list[str | int] = []
+        line_parts: list[str | int] = []
+        corr_parts: list[str | int] = []
         last_end = 0
         for m in _SOLUTION_TOKEN_RE.finditer(line):
             if m.start() > last_end:
-                parts.append(line[last_end : m.start()])
-            parts.append(len(tokens))
+                line_parts.append(line[last_end : m.start()])
+                corr_parts.append(line[last_end : m.start()])
+            line_parts.append(-1)
+            corr_parts.append(m.group())
             tokens.append(m.group())
             last_end = m.end()
         if last_end < len(line):
-            parts.append(line[last_end:])
-        lines.append(parts)
-    return tokens, lines
+            line_parts.append(line[last_end:])
+            corr_parts.append(line[last_end:])
+        lines.append(line_parts)
+        correct.append(corr_parts)
+    return tokens, lines, correct
 
 
 class LoginCmd(TypedDict):
@@ -102,6 +111,34 @@ class AdminReloadPuzzlesCmd(TypedDict):
 class AdminDebuffCmd(TypedDict):
     type: Literal["administer_debuff"]
     players: list[str]
+    name: str
+    debuff_type: str
+    strength: float
+    duration: float
+
+
+class MinigameAward(TypedDict):
+    name: str
+    type: str
+    strength: float
+    duration: float
+
+
+class MinigamePuzzleActivated(TypedDict):
+    type: Literal["puzzle_activated"]
+    players: list[str]
+    awards: list[MinigameAward]
+    tokens: list[str]
+    solution_lines: list[list[str | int]]
+    correct_solution: list[list[str | int]]
+    template: str
+
+
+class MinigameDebuffCmd(TypedDict):
+    """Debuff assignment from the minigame backend (single player target)."""
+
+    type: Literal["administer_debuff"]
+    player: str
     name: str
     debuff_type: str
     strength: float
@@ -465,11 +502,13 @@ class Puzzle:
     id: str
     title: str
     description: str
-    template: str  # code template to start with
+    template: str  # code template to start with (| removed)
+    raw_template: str  # original template with | cursor marker
     start_pos: tuple[int, int]  # (col, row)
     wrapper: str  # wrapper to insert user code in with format(); must print expected output then SEPARATOR before running user code
-    solution_tokens: list[str] = field(default_factory=list[str])
-    solution_lines: list[list[str | int]] = field(default_factory=list[list[str | int]])
+    solution_tokens: list[str]
+    solution_lines: list[list[str | int]]
+    correct_solution: list[list[str | int]]
 
     def json(self) -> PuzzleJson:
         """Returns the puzzle data as JSON."""
@@ -515,6 +554,8 @@ class PlayerManager:
         self.debuff_system_prompts: dict[str, str] = {}
         self.pending_ids: set[str] = set()
         self.id_mapping: dict[str, str] = {}
+        self.minigame_puzzle_event = asyncio.Event()
+        self.minigame_puzzle_buf: MinigamePuzzleActivated | None = None
 
     async def load_players(self) -> None:
         """Loads players from the database into memory."""
@@ -582,6 +623,8 @@ class PlayerManager:
         # Synchronously update state (no further awaits)
         self.current_puzzle = puzzle
         self.broadcast_to_admins(self.get_puzzle_list())
+        if MINIGAME_BACKEND:
+            self.notify_minigame_puzzle()
         self.submissions.clear()
         for row in existing_submissions:
             if row[0] in self.players:
@@ -681,13 +724,15 @@ class PlayerManager:
                 start_row = start_code.count("\n")
                 start_col = len(start_code.rpartition("\n")[2])
                 raw_solution = entry.get("modelSolution", "").strip()
-                solution_tokens, solution_lines = tokenize_solution(raw_solution)
+                solution_tokens, solution_lines, correct_solution = tokenize_solution(raw_solution)
                 puzzle = Puzzle(
                     **{k: v for k, v in entry.items() if k not in ("template", "start_pos", "modelSolution")},
                     template=entry["template"].replace("|", ""),
+                    raw_template=entry["template"],
                     start_pos=(start_col, start_row),
                     solution_tokens=solution_tokens,
                     solution_lines=solution_lines,
+                    correct_solution=correct_solution,
                 )
                 puzzles[puzzle.id] = puzzle
         except Exception:
@@ -951,6 +996,75 @@ class PlayerManager:
         if not found_any:
             return {"type": "error", "message": "No such player"}
         return None
+
+    def notify_minigame_puzzle(self) -> None:
+        """Buffer the current puzzle for the minigame backend and wake the sender."""
+        puzzle = self.current_puzzle
+        if not puzzle or not puzzle.solution_tokens:
+            return
+        self.minigame_puzzle_buf = MinigamePuzzleActivated(
+            type="puzzle_activated",
+            players=list(self.players.keys()),
+            awards=MINIGAME_AWARDS,
+            tokens=puzzle.solution_tokens,
+            solution_lines=puzzle.solution_lines,
+            correct_solution=puzzle.correct_solution,
+            template=puzzle.raw_template,
+        )
+        self.minigame_puzzle_event.set()
+
+    async def minigame_ws_task(self, done: asyncio.Event) -> None:
+        """Background task: maintain a WebSocket connection to the minigame backend."""
+        url = f"ws://{MINIGAME_BACKEND}:6978"
+        headers = {"X-Secret": ADMIN_PASSWORD or ""}
+        while not done.is_set():
+            try:
+                async with connect(url, additional_headers=headers) as ws:
+                    log.info("Connected to minigame backend")
+                    # Run send/receive concurrently
+                    send_task = asyncio.create_task(self._minigame_send_loop(ws, done))
+                    try:
+                        async for raw in ws:
+                            try:
+                                msg = json.loads(raw)
+                                if msg.get("type") == "administer_debuff":
+                                    debuff_cmd: MinigameDebuffCmd = msg
+                                    self.administer_debuff(
+                                        AdminDebuffCmd(
+                                            type="administer_debuff",
+                                            players=[debuff_cmd["player"]],
+                                            name=debuff_cmd["name"],
+                                            debuff_type=debuff_cmd["debuff_type"],
+                                            strength=debuff_cmd["strength"],
+                                            duration=debuff_cmd["duration"],
+                                        )
+                                    )
+                                else:
+                                    log.warning(f"Unknown message from minigame: {msg.get('type')!r}")
+                            except Exception:
+                                log.exception("Error handling minigame message")
+                    finally:
+                        send_task.cancel()
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                log.exception("Minigame backend connection error")
+            if not done.is_set():
+                await asyncio.sleep(1)
+
+    async def _minigame_send_loop(self, ws: ClientConnection, done: asyncio.Event) -> None:
+        """Wait for puzzle updates and send them over the minigame WebSocket."""
+        try:
+            while not done.is_set():
+                if self.minigame_puzzle_buf is not None:
+                    log.info("Sending puzzle update to minigame backend")
+                    puzzle = self.minigame_puzzle_buf
+                    self.minigame_puzzle_buf = None
+                    self.minigame_puzzle_event.clear()
+                    await ws.send(json.dumps(puzzle))
+                await self.minigame_puzzle_event.wait()
+        except (ConnectionClosed, asyncio.CancelledError):
+            pass
 
 
 async def send(ws: ServerConnection, message: WsMessage):
@@ -1242,6 +1356,10 @@ async def main():
 
     save_players = asyncio.create_task(save_players_periodically(player_manager, done))
     watch_yamls = asyncio.create_task(watch_yaml_files(player_manager, done))
+    minigame_task: asyncio.Task[None] | None = None
+    if MINIGAME_BACKEND:
+        log.info(f"Minigame backend configured at {MINIGAME_BACKEND}:6978")
+        minigame_task = asyncio.create_task(player_manager.minigame_ws_task(done))
 
     server = await serve(lambda ws: ws_handler(ws, player_manager), "localhost", 6979)
 
@@ -1251,6 +1369,12 @@ async def main():
     # Wait for background tasks to finish
     await save_players
     await watch_yamls
+    if minigame_task:
+        minigame_task.cancel()
+        try:
+            await minigame_task
+        except asyncio.CancelledError:
+            pass
 
     await db.close()
 
