@@ -190,6 +190,15 @@ export default function MinigameApp() {
     );
   }
 
+  if (!canConnect) {
+    return (
+      <div className="flex flex-col h-screen p-2 gap-4">
+        {connIndicator}
+        <div className="text-red-400 text-center text-sm">Missing token. Please use the QR code provided.</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen p-2 gap-4">
       {connIndicator}
