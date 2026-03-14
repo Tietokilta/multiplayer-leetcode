@@ -1,6 +1,7 @@
 import asyncio
 import json
 import math
+import random
 import signal
 import time
 import traceback
@@ -21,6 +22,140 @@ HOST = environ.get("HOST", "0.0.0.0")
 PORT = int(environ.get("PORT", "6978"))
 ATTEMPT_RATE_LIMIT = 5.0  # seconds between attempts per minigame player
 GOOD_PLAYER_COOLDOWN = int(environ.get("GOOD_PLAYER_COOLDOWN", "1"))  # puzzles to skip after earning an award
+
+
+# ── Solution comparison ────────────────────────────────────────────────────────
+
+# Operators where (a OP b) == (b OP a)
+_COMMUTATIVE_OPS: frozenset[str] = frozenset(["==", "!=", "+", "*", "&", "|", "^", "and", "or"])
+
+# Operator precedence — lower number splits first (= lower Python precedence).
+# Keywords that introduce clauses are given the lowest numbers so they split
+# the line before any expression operator.
+_OP_PREC: dict[str, int] = {
+    "if": -3, "elif": -3, "for": -3, "while": -3, "return": -3, "else": -3,
+    ":": -2, ";": -2,
+    ",": -1,
+    "or": 0, "and": 1,
+    "==": 2, "!=": 2, "<": 2, ">": 2, "<=": 2, ">=": 2,
+    "|": 3, "^": 4, "&": 5,
+    "+": 6, "-": 6,
+    "*": 7, "/": 7, "//": 7, "%": 7,
+}
+
+_OPEN: frozenset[str] = frozenset("([{")
+_CLOSE: frozenset[str] = frozenset(")]}")
+_MATCHING_CLOSE: dict[str, str] = {"(": ")", "[": "]", "{": "}"}
+
+
+def _extract_tokens(line: list[str | int]) -> list[str | int]:
+    """Strip pure-whitespace strings; keep token strings and any unfilled slots."""
+    return [x for x in line if not (isinstance(x, str) and not x.strip())]
+
+
+def _find_split_op(tokens: list[str | int]) -> int | None:
+    """Return the index of the rightmost lowest-precedence operator at bracket depth 0."""
+    depth = 0
+    best_idx: int | None = None
+    best_prec: int | None = None
+    for i, tok in enumerate(tokens):
+        if not isinstance(tok, str):
+            continue
+        if tok in _OPEN:
+            depth += 1
+        elif tok in _CLOSE:
+            depth -= 1
+        elif depth == 0 and tok in _OP_PREC:
+            prec = _OP_PREC[tok]
+            if best_prec is None or prec <= best_prec:  # <= keeps rightmost
+                best_prec = prec
+                best_idx = i
+    return best_idx
+
+
+def _find_bracket_end(tokens: list[str | int], start: int) -> int:
+    """Return the index of the matching closing bracket for tokens[start], or -1."""
+    open_tok = tokens[start]
+    assert isinstance(open_tok, str)
+    close_tok = _MATCHING_CLOSE[open_tok]
+    depth = 1
+    for i in range(start + 1, len(tokens)):
+        tok = tokens[i]
+        if not isinstance(tok, str):
+            continue
+        if tok == open_tok:
+            depth += 1
+        elif tok == close_tok:
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def _token_seqs_equiv(sub: list[str | int], cor: list[str | int]) -> bool:
+    """Return True if *sub* is commutatively equivalent to *cor*."""
+    if sub == cor:
+        return True
+
+    # Strategy 1: split at the lowest-precedence operator in *cor* and try
+    # both orderings when that operator is commutative.
+    split_idx = _find_split_op(cor)
+    if split_idx is not None:
+        op = cor[split_idx]
+        assert isinstance(op, str)
+        cor_left = cor[:split_idx]
+        cor_right = cor[split_idx + 1:]
+        depth = 0
+        for i, tok in enumerate(sub):
+            if not isinstance(tok, str):
+                continue
+            if tok in _OPEN:
+                depth += 1
+            elif tok in _CLOSE:
+                depth -= 1
+            elif depth == 0 and tok == op:
+                sl, sr = sub[:i], sub[i + 1:]
+                if op in _COMMUTATIVE_OPS:
+                    if _token_seqs_equiv(sl, cor_left) and _token_seqs_equiv(sr, cor_right):
+                        return True
+                    if _token_seqs_equiv(sl, cor_right) and _token_seqs_equiv(sr, cor_left):
+                        return True
+                else:
+                    if _token_seqs_equiv(sl, cor_left) and _token_seqs_equiv(sr, cor_right):
+                        return True
+
+    # Strategy 2: element-by-element, recursing into matching bracket pairs so
+    # commutativity inside e.g. range(a + b) is also handled.
+    if len(sub) != len(cor):
+        return False
+    i = 0
+    while i < len(cor):
+        c, s = cor[i], sub[i]
+        if isinstance(c, str) and c in _OPEN:
+            if not (isinstance(s, str) and s == c):
+                return False
+            ce = _find_bracket_end(cor, i)
+            se = _find_bracket_end(sub, i)
+            if ce < 0 or se < 0 or ce != se:
+                return False
+            if not _token_seqs_equiv(sub[i + 1 : se], cor[i + 1 : ce]):
+                return False
+            i = ce + 1
+        else:
+            if s != c:
+                return False
+            i += 1
+    return True
+
+
+def _solutions_equiv(submitted: list[list[str | int]], correct: list[list[str | int]]) -> bool:
+    """Return True if submitted solution matches correct accounting for commutativity."""
+    if len(submitted) != len(correct):
+        return False
+    return all(
+        _token_seqs_equiv(_extract_tokens(s), _extract_tokens(c))
+        for s, c in zip(submitted, correct)
+    )
 
 
 # ── Inbound models (Pydantic) ──────────────────────────────────────────────────
@@ -227,8 +362,10 @@ class MinigameServer:
             log.info("Main game server disconnected")
 
     async def on_puzzle_activated(self, cmd: PuzzleActivatedCmd) -> None:
+        shuffled_tokens = list(cmd.tokens)
+        random.shuffle(shuffled_tokens)
         self.puzzle_state = PuzzleState(
-            tokens=cmd.tokens,
+            tokens=shuffled_tokens,
             solution_lines=cmd.solution_lines,
             correct_solution=cmd.correct_solution,
             awards=cmd.awards,
@@ -360,7 +497,7 @@ class MinigameServer:
 
         ps = self.puzzle_state
 
-        if cmd.solution != ps.correct_solution:
+        if not _solutions_equiv(cmd.solution, ps.correct_solution):
             await send(player.ws, FeedbackMessage(type="incorrect"))
             return
 
