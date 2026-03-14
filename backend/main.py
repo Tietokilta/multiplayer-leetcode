@@ -443,6 +443,21 @@ class Debuff:
 
 
 @dataclass
+class PlayerRoundStats:
+    """Per-player statistics collected during a puzzle round."""
+
+    puzzle_id: str
+    start_time: float  # time.monotonic() when round started for this player
+    keypresses: int = 0  # code-changing keystrokes
+    wrong_submissions: int = 0
+    debuffs_received: list[dict] = field(default_factory=list)
+    solved: bool = False
+    time_to_solution: float | None = None  # seconds from start_time
+    solution_keypresses: int | None = None  # keypresses at time of valid submission
+    solution_length: int | None = None  # len(code) of valid submission
+
+
+@dataclass
 class Player:
     name: str
     score: int
@@ -570,6 +585,8 @@ class PlayerManager:
         self.id_mapping: dict[str, str] = {}
         self.minigame_puzzle_event = asyncio.Event()
         self.minigame_puzzle_buf: MinigamePuzzleActivated | None = None
+        self.round_stats: dict[str, PlayerRoundStats] = {}
+        self.puzzle_start_time: float | None = None
 
     async def load_players(self) -> None:
         """Loads players from the database into memory."""
@@ -590,8 +607,66 @@ class PlayerManager:
                 self.broadcast_to_admins(self.get_pending_logins_msg())
             return {"type": "error", "message": "No such player"}
         player = self.players[actual_name]
+        # Ensure round stats exist if a round is active and player is connecting
+        if actual_name not in self.round_stats and self.current_puzzle:
+            self.round_stats[actual_name] = PlayerRoundStats(
+                puzzle_id=self.current_puzzle.id,
+                start_time=self.puzzle_start_time or time.monotonic(),
+            )
         await player.connected(ws)
         return player
+
+    async def _save_round_stats(self) -> None:
+        """Upsert current in-memory round stats to the database."""
+        if not self.round_stats:
+            return
+        rows = [
+            (
+                name,
+                stats.puzzle_id,
+                int(stats.solved),
+                stats.time_to_solution,
+                stats.wrong_submissions,
+                stats.keypresses,
+                json.dumps(stats.debuffs_received),
+                stats.solution_length,
+            )
+            for name, stats in self.round_stats.items()
+        ]
+        await self.db.executemany(
+            """INSERT OR REPLACE INTO puzzle_stats
+               (player_name, puzzle_id, solved, time_to_solution, wrong_submissions,
+                keypresses, debuffs_received, solution_length)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        await self.db.commit()
+
+    async def get_stats(self) -> dict:
+        """Flush and return all puzzle stats from the database."""
+        await self._save_round_stats()
+        cursor = await self.db.execute(
+            """SELECT player_name, puzzle_id, solved, time_to_solution,
+                      wrong_submissions, keypresses, debuffs_received, solution_length
+               FROM puzzle_stats ORDER BY puzzle_id, player_name"""
+        )
+        rows = await cursor.fetchall()
+        return {
+            "type": "stats",
+            "stats": [
+                {
+                    "player_name": row[0],
+                    "puzzle_id": row[1],
+                    "solved": bool(row[2]),
+                    "time_to_solution": row[3],
+                    "wrong_submissions": row[4],
+                    "keypresses": row[5],
+                    "debuffs_received": json.loads(row[6]),
+                    "solution_length": row[7],
+                }
+                for row in rows
+            ],
+        }
 
     async def switch_puzzle(
         self,
@@ -639,12 +714,21 @@ class PlayerManager:
             (puzzle.id,),
         )
         await self.db.commit()
+        # Save stats for the previous round before switching
+        await self._save_round_stats()
         # Synchronously update state (no further awaits)
         self.current_puzzle = puzzle
         self.broadcast_to_admins(self.get_puzzle_list())
         # TODO: Make reloading a puzzle not destroy the awards on the minigame server.
         if MINIGAME_BACKEND:
             self.notify_minigame_puzzle(awards or [])
+        # Initialize fresh round stats for all players
+        now = time.monotonic()
+        self.puzzle_start_time = now
+        self.round_stats = {
+            name: PlayerRoundStats(puzzle_id=puzzle.id, start_time=now)
+            for name in self.players
+        }
         self.submissions.clear()
         for row in existing_submissions:
             if row[0] in self.players:
@@ -704,7 +788,16 @@ class PlayerManager:
             log.info(
                 f"Submission finished for player {player.name} with status {submission.status}, error: {submission.error}"
             )
-            # TODO: recalculate score based on time, attempts, etc?
+            # Record round stats
+            if player.name in self.round_stats:
+                stats = self.round_stats[player.name]
+                if submission.status == "valid":
+                    stats.solved = True
+                    stats.time_to_solution = time.monotonic() - stats.start_time
+                    stats.solution_keypresses = stats.keypresses
+                    stats.solution_length = len(submission.code)
+                elif submission.status == "invalid":
+                    stats.wrong_submissions += 1
             # Save submission to database
             await self.db.execute(
                 """
@@ -1004,6 +1097,11 @@ class PlayerManager:
                     duration=duration,
                 )
             )
+            # Record in round stats
+            if player_name in self.round_stats:
+                self.round_stats[player_name].debuffs_received.append(
+                    {"name": cmd["name"], "strength": cmd["strength"], "duration": cmd["duration"]}
+                )
             msg: DebuffMessage = {
                 "type": "debuffs",
                 "debuffs": [
@@ -1211,6 +1309,8 @@ async def ws_handler(
                                         duration=debuff_cmd["duration"],
                                     )
                                 )
+                    elif msg["type"] == "get_stats":
+                        await send(ws, await manager.get_stats())
                     elif msg["type"] == "assign_id":
                         generated_id = msg["generated_id"]
                         player_name = msg["player"]
@@ -1231,6 +1331,8 @@ async def ws_handler(
                     assert player is not None
                     if msg["type"] == "edit":
                         if "code" in msg:
+                            if msg["code"] != player.code and player.name in manager.round_stats:
+                                manager.round_stats[player.name].keypresses += 1
                             player.code = msg["code"]
                         player.row = msg["row"]
                         player.col = msg["col"]
@@ -1417,6 +1519,18 @@ async def main():
             key TEXT PRIMARY KEY NOT NULL,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS puzzle_stats (
+            player_name VARCHAR(15) NOT NULL,
+            puzzle_id VARCHAR(15) NOT NULL,
+            solved INTEGER NOT NULL DEFAULT 0,
+            time_to_solution REAL,
+            wrong_submissions INTEGER NOT NULL DEFAULT 0,
+            keypresses INTEGER NOT NULL DEFAULT 0,
+            debuffs_received TEXT NOT NULL DEFAULT '[]',
+            solution_length INTEGER,
+            PRIMARY KEY (player_name, puzzle_id),
+            FOREIGN KEY (player_name) REFERENCES players(name)
+        );
         """
     )
     await db.commit()
@@ -1445,6 +1559,7 @@ async def main():
 
     # Wait for background tasks to finish
     await save_players
+    await player_manager._save_round_stats()
     await watch_yamls
     if minigame_task:
         minigame_task.cancel()
