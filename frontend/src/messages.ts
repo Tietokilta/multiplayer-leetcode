@@ -32,7 +32,8 @@ export type PlayerMessage =
   | { type: "output"; first: boolean; content: string }
   | StateMessage
   | { type: "debuffs"; debuffs: DebuffItem[] }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "refresh" };
 
 export type KeyboardServerCmd = [keyboardId: string, numLock: 0 | 1, capsLock: 0 | 1, scrollLock: 0 | 1];
 

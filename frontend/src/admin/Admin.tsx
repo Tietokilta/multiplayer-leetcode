@@ -166,12 +166,20 @@ export default function Admin() {
               Change
             </button>
           </div>
-          <button
-            className="text-blue-500 underline text-sm p-1 rounded cursor-pointer hover:bg-blue-500/25"
-            onClick={reloadPuzzles}
-          >
-            Reload puzzles.yaml
-          </button>
+          <div className="flex gap-2">
+            <button
+              className="text-blue-500 underline text-sm p-1 rounded cursor-pointer hover:bg-blue-500/25"
+              onClick={reloadPuzzles}
+            >
+              Reload puzzles.yaml
+            </button>
+            <button
+              className="text-orange-500 underline text-sm p-1 rounded cursor-pointer hover:bg-orange-500/25"
+              onClick={() => server.send({ type: "refresh_clients" })}
+            >
+              Refresh clients
+            </button>
+          </div>
         </div>
 
         {/* Player Management */}

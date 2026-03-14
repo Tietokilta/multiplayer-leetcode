@@ -311,6 +311,9 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
         this.updateScreensaver(false);
         break;
       }
+      case "refresh":
+        window.location.reload();
+        break;
       case "error":
         console.error("Game server error:", data.message);
         this.update({ submissionError: data.message });

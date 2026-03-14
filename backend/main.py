@@ -1323,6 +1323,10 @@ async def ws_handler(
                             manager.id_mapping[generated_id] = player_name
                             manager.pending_ids.discard(generated_id)
                             manager.broadcast_to_admins(manager.get_pending_logins_msg())
+                    elif msg["type"] == "refresh_clients":
+                        log.info("Admin refreshing all game clients")
+                        for p in manager.players.values():
+                            p.send({"type": "refresh"})
                     else:
                         await send(ws, {"type": "error", "message": "unknown admin action"})
 

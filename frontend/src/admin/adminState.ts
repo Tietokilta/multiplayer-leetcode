@@ -23,7 +23,8 @@ export type AdminCmd =
       duration: number;
     }
   | { type: "launch_round"; puzzle: string; initial_debuffs: PreparedDebuff[]; awards: PreparedDebuff[] }
-  | { type: "clear_debuff"; players: string[]; name: string | null };
+  | { type: "clear_debuff"; players: string[]; name: string | null }
+  | { type: "refresh_clients" };
 
 export type PreparedDebuff = { name: string; debuff_type: string; strength: number; duration: number };
 
