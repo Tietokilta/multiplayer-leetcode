@@ -38,7 +38,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
     console.log("Connecting to game server at", ip);
     this.handleState?.("connecting");
     this.active = true;
-    this.socket = new WebSocket(`ws://${ip}:${port}/`);
+    this.socket = new WebSocket(`${window.location.protocol === "https:" ? "wss" : "ws"}://${ip}:${port}/`);
 
     this.socket.addEventListener("open", () => {
       console.log("Game server connection opened");

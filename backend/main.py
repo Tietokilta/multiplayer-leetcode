@@ -1059,7 +1059,9 @@ class PlayerManager:
 
     async def minigame_ws_task(self, done: asyncio.Event) -> None:
         """Background task: maintain a WebSocket connection to the minigame backend."""
-        url = f"ws://{MINIGAME_BACKEND}:6978"
+        url = MINIGAME_BACKEND
+        if not url:
+            return
         headers = {"X-Secret": ADMIN_PASSWORD or ""}
         while not done.is_set():
             try:

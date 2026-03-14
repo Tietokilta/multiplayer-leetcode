@@ -17,8 +17,10 @@ log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
 MINIGAME_JWT_SECRET = environ.get("MINIGAME_JWT_SECRET")
+HOST = environ.get("HOST", "0.0.0.0")
 PORT = int(environ.get("PORT", "6978"))
 ATTEMPT_RATE_LIMIT = 5.0  # seconds between attempts per minigame player
+GOOD_PLAYER_COOLDOWN = int(environ.get("GOOD_PLAYER_COOLDOWN", "1"))  # puzzles to skip after earning an award
 
 
 # ── Inbound models (Pydantic) ──────────────────────────────────────────────────
@@ -110,12 +112,17 @@ class WelcomeMessage(TypedDict):
     name: str
 
 
+class CooldownMessage(TypedDict):
+    type: Literal["cooldown"]
+    puzzles_remaining: int
+
+
 class ErrorMessage(TypedDict):
     type: Literal["error"]
     message: str
 
 
-type MessageOut = PuzzleMessage | FeedbackMessage | AwardMessage | AwardGrantedMessage | DebuffAssignedMessage | AssignedMessage | LimitReachedMessage | WelcomeMessage | ErrorMessage
+type MessageOut = PuzzleMessage | FeedbackMessage | AwardMessage | AwardGrantedMessage | DebuffAssignedMessage | AssignedMessage | LimitReachedMessage | WelcomeMessage | CooldownMessage | ErrorMessage
 
 
 class AdministerDebuffCmd(TypedDict):
@@ -140,6 +147,7 @@ class MinigamePlayer:
     last_attempt: float = 0.0
     earned_award_idx: int | None = None
     award_used: bool = False
+    cooldown_remaining: int = 0
 
 
 @dataclass
@@ -233,6 +241,8 @@ class MinigameServer:
             player.earned_award_idx = None
             player.award_used = False
             player.last_attempt = 0.0
+            player.cooldown_remaining = max(0, player.cooldown_remaining - 1)
+            await send(player.ws, CooldownMessage(type="cooldown", puzzles_remaining=player.cooldown_remaining))
 
         await self.broadcast(
             PuzzleMessage(
@@ -256,6 +266,7 @@ class MinigameServer:
 
         if existing := self.players.get(player_id):
             try:
+                log.info(f"Player {player_id} already connected, closing old connection")
                 await existing.ws.close()
             except Exception:
                 pass
@@ -305,6 +316,8 @@ class MinigameServer:
                             ),
                         )
 
+            await send(ws, CooldownMessage(type="cooldown", puzzles_remaining=player.cooldown_remaining))
+
             async for raw in ws:
                 try:
                     cmd = _player_cmd.validate_json(raw)
@@ -353,6 +366,10 @@ class MinigameServer:
 
         await send(player.ws, FeedbackMessage(type="correct"))
 
+        if player.cooldown_remaining > 0:
+            await send(player.ws, CooldownMessage(type="cooldown", puzzles_remaining=player.cooldown_remaining))
+            return
+
         if ps.next_award_idx >= len(ps.awards):
             return
 
@@ -369,7 +386,9 @@ class MinigameServer:
                 awards_remaining=len(ps.awards) - ps.next_award_idx,
             )
         )
-        log.info(f"Player {player.id} earned award {award_idx}: {award.name}")
+        player.cooldown_remaining = GOOD_PLAYER_COOLDOWN
+        log.info(f"Player {player.id} earned award {award_idx}: {award.name} (cooldown set to {GOOD_PLAYER_COOLDOWN})")
+        await send(player.ws, CooldownMessage(type="cooldown", puzzles_remaining=player.cooldown_remaining))
 
     async def on_player_assign(self, player: MinigamePlayer, cmd: AssignCmd) -> None:
         if self.puzzle_state is None:
@@ -470,8 +489,8 @@ async def main() -> None:
     loop.add_signal_handler(signal.SIGTERM, done.set)
 
     server = MinigameServer()
-    async with serve(server.ws_handler, "0.0.0.0", PORT):
-        log.info(f"Minigame server listening on port {PORT}")
+    async with serve(server.ws_handler, HOST, PORT):
+        log.info(f"Minigame server listening on {HOST}:{PORT}")
         await done.wait()
 
     log.info("Shutting down")

@@ -53,10 +53,12 @@ function walkSolution<T>(
 export function MinigameCode({
   puzzle,
   incorrect,
+  disabled,
   onSubmit,
 }: {
   puzzle: MinigamePuzzleMsg;
   incorrect: boolean;
+  disabled: boolean;
   onSubmit: (solution: Solution) => void;
 }) {
   const [solution, setSolution] = useState(() => prepareSolution(puzzle.solution_lines));
@@ -166,7 +168,7 @@ export function MinigameCode({
           ${rateLimit ? (incorrect ? "incorrect ratelimit" : "ratelimit") : "disabled:bg-gray-600"}
           disabled:cursor-not-allowed`}
         onClick={handleSubmit}
-        disabled={solution.flat().includes(-1) || rateLimit != null}
+        disabled={solution.flat().includes(-1) || rateLimit != null || disabled}
       >
         {incorrect && rateLimit ? "Incorrect" : "Submit"}
       </button>

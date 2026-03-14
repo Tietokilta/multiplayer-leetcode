@@ -39,6 +39,7 @@ type MinigameMsg =
   | { type: "debuff_assigned"; debuff_name: string; target: string }
   | { type: "assigned"; target: string }
   | { type: "limit_reached"; target: string }
+  | { type: "cooldown"; puzzles_remaining: number }
   | { type: "error"; message: string };
 
 const MINIGAME_PORT = 6978;
@@ -90,6 +91,7 @@ export default function MinigameApp() {
   const [awardsRemaining, setAwardsRemaining] = useState(0);
   const [limitTarget, setLimitTarget] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [cooldown, setCooldown] = useState(0);
 
   useEffect(() => {
     const server = serverRef.current;
@@ -126,6 +128,9 @@ export default function MinigameApp() {
           break;
         case "limit_reached":
           setLimitTarget(msg.target);
+          break;
+        case "cooldown":
+          setCooldown(msg.puzzles_remaining);
           break;
         case "error":
           setError(msg.message);
@@ -207,22 +212,30 @@ export default function MinigameApp() {
             }}
           />
         </>
-      ) : awardsRemaining > 0 ? (
+      ) : (
         <>
-          <div className="text-gray-200 text-center animate-pulse">
-            Solve the puzzle! {awardsRemaining} award{awardsRemaining !== 1 && "s"} remaining.
-          </div>
+          {cooldown > 0 ? (
+            <div className="text-gray-400 text-center">
+              You're pretty good at this! We'll reserve the awards for other players for {cooldown} more puzzle
+              {cooldown !== 1 ? "s" : ""}.
+            </div>
+          ) : awardsRemaining > 0 ? (
+            <div className="text-gray-400 text-center">All awards claimed. Wait for the next puzzle.</div>
+          ) : (
+            <div className="text-gray-200 text-center animate-pulse">
+              Solve the puzzle! {awardsRemaining} award{awardsRemaining !== 1 && "s"} remaining.
+            </div>
+          )}
           <MinigameCode
             puzzle={puzzle}
             incorrect={incorrect}
+            disabled={awardsRemaining === 0 || cooldown > 0}
             onSubmit={(solution) => {
               setIncorrect(false);
               serverRef.current.send({ type: "submit", solution });
             }}
           />
         </>
-      ) : (
-        <div className="text-gray-400 text-center">All awards claimed. Wait for next puzzle.</div>
       )}
     </div>
   );
