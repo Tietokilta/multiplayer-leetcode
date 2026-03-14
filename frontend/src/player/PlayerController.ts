@@ -304,10 +304,12 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
         if (data.debuffs.length === 0) {
           this.updateDebuffs(false);
           this.rerender();
+          this.sendLeds();
           break;
         }
         this.updateDebuffs(data.debuffs);
         this.rerender();
+        this.sendLeds();
         this.updateScreensaver(false);
         break;
       }
