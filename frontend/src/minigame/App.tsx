@@ -199,6 +199,15 @@ export default function MinigameApp() {
     );
   }
 
+  if (connState !== "connected" && serverIpError) {
+    return (
+      <div className="flex flex-col h-screen p-2 gap-4">
+        {connIndicator}
+        <div className="text-red-400 text-center text-sm">{serverIpError}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen p-2 gap-4">
       {connIndicator}
