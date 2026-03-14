@@ -251,7 +251,7 @@ class MinigameServer:
 
     # ── Minigame players ───────────────────────────────────────────────────────
 
-    async def handle_player(self, ws: ServerConnection, player_id: str) -> None:
+    async def handle_player(self, ws: ServerConnection, player_id: str, player_name: str = "") -> None:
         log.info(f"Minigame player connected: {player_id}")
 
         if existing := self.players.get(player_id):
@@ -268,7 +268,7 @@ class MinigameServer:
                 ws,
                 WelcomeMessage(
                     type="welcome",
-                    name=player_id,
+                    name=player_name or player_id,
                 ),
             )
 
@@ -445,6 +445,7 @@ class MinigameServer:
                 login.token, MINIGAME_JWT_SECRET, algorithms=["HS256"]
             )
             player_id: str = payload["sub"]
+            player_name: str = payload.get("name", player_id)
         except jwt.InvalidTokenError as e:
             log.warning(f"Invalid JWT from player: {e}")
             await send(ws, ErrorMessage(type="error", message="invalid token"))
@@ -456,7 +457,7 @@ class MinigameServer:
             await ws.close()
             return
 
-        await self.handle_player(ws, player_id)
+        await self.handle_player(ws, player_id, player_name)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
