@@ -237,7 +237,7 @@ export default function MinigameApp() {
               You're pretty good at this! We'll reserve the awards for other players for {cooldown} more puzzle
               {cooldown !== 1 ? "s" : ""}.
             </div>
-          ) : awardsRemaining > 0 ? (
+          ) : awardsRemaining === 0 ? (
             <div className="text-gray-400 text-center">All awards claimed. Wait for the next puzzle.</div>
           ) : (
             <div className="text-gray-200 text-center animate-pulse">
