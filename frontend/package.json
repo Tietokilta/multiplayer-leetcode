@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:minigame": "vite --open /minigame.html",
     "build": "tsc -b && vite build",
+    "build:minigame": "tsc -b && BUILD_TARGET=minigame vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

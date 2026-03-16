@@ -4,6 +4,8 @@
   template: |
     # Your code here
     |
+  modelSolution: |
+    print("Hello, World!")
   wrapper: |
     print("Hello, World!")
     print("=== END EXPECTED OUTPUT ===")
@@ -17,6 +19,8 @@
     def sum_two_numbers(a, b):
       # Your code here
       return |
+  modelSolution: |
+    a + b
   wrapper: |
     {}
 
@@ -55,6 +59,10 @@
       a = 1
       b = 1
       |
+  modelSolution: |
+    for _ in range(n):
+      print(a)
+      a, b = b, a + b
   wrapper: |
     {}
 
@@ -91,6 +99,8 @@
     def factorial(n):
       # Your code here
       return |
+  modelSolution: |
+    factorial(n - 1) * n if n > 0 else 1
   wrapper: |
     {}
 
@@ -120,29 +130,33 @@
     def bogosort(lst):
       # Your code here
       |
+  modelSolution: |
+    while lst != sorted(lst):
+      shuffle(lst)
   wrapper: |
     {}
 
-    class ListWrapper(list):
-      def make_wrapper(f):
-        import inspect, functools
-        @functools.wraps(f)
-        def wrapper(self, *args, **kwargs):
+    def _wrap_list(lst):
+      import inspect
+      from collections.abc import MutableSequence
+      class list(MutableSequence):
+        def __getitem__(self, index):
+          return lst.__getitem__(index)
+        def __setitem__(self, index, value):
           if inspect.stack()[1].frame.f_code.co_qualname != "Random.shuffle":
             raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
-          return f(self, *args, **kwargs)
-        return wrapper
-
-      __setitem__ = make_wrapper(list.__setitem__)
-      __delitem__ = make_wrapper(list.__delitem__)
-      append = make_wrapper(list.append)
-      extend = make_wrapper(list.extend)
-      insert = make_wrapper(list.insert)
-      pop = make_wrapper(list.pop)
-      remove = make_wrapper(list.remove)
-      clear = make_wrapper(list.clear)
-      sort = make_wrapper(list.sort)
-      reverse = make_wrapper(list.reverse)
+          return lst.__setitem__(index, value)
+        def __delitem__(self, index):
+          raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
+        def insert(self, index, value):
+          raise RuntimeError("Modifying the list is not allowed except by random.shuffle().")
+        def __len__(self):
+          return lst.__len__()
+        def __str__(self):
+          return lst.__str__()
+        def __repr__(self):
+          return lst.__repr__()
+      return list()
 
     def _test():
       import random as _random
@@ -159,8 +173,151 @@
       print("=== END EXPECTED OUTPUT ===")
 
       for _lst in _lsts:
-        _wrapped = ListWrapper(_lst)
+        _wrapped = _wrap_list(_lst)
         bogosort(_wrapped)
         print("bogosort(" + str(_lst) + ") =", _wrapped)
+
+    _test()
+
+- id: fizzbuzz
+  title: FizzBuzz
+  description: |
+    Write a function that returns:
+    - **"FizzBuzz"** if n is divisible by both 3 and 5
+    - **"Fizz"** if n is divisible only by 3
+    - **"Buzz"** if n is divisible only by 5
+    - the number as a **string** otherwise
+  template: |
+    def fizzbuzz(n):
+      |
+  modelSolution: |
+    if n % 15 == 0:
+      return "FizzBuzz"
+    elif n % 3 == 0:
+      return "Fizz"
+    elif n % 5 == 0:
+      return "Buzz"
+    else:
+      return str(n)
+  wrapper: |
+    {}
+
+    def _test():
+      import random as _random
+      _cases = [1, 3, 5, 15, 30, 7, 9, 10, 21, 25] + [_random.randint(1, 50) for _ in range(3)]
+      def _fb(n):
+        if n % 15 == 0: return "FizzBuzz"
+        elif n % 3 == 0: return "Fizz"
+        elif n % 5 == 0: return "Buzz"
+        else: return str(n)
+      for _n in _cases:
+        print("fizzbuzz(" + str(_n) + ") =", _fb(_n))
+      print("=== END EXPECTED OUTPUT ===")
+      for _n in _cases:
+        print("fizzbuzz(" + str(_n) + ") =", fizzbuzz(_n))
+
+    _test()
+
+- id: print_multiples
+  title: Print Multiples
+  description: |
+    Write a function that prints all multiples of k from k up to and including n.
+
+    For example, print_multiples(3, 12) would print:\
+    3\
+    6\
+    9\
+    12
+  template: |
+    def print_multiples(k, n):
+      |
+  modelSolution: |
+    for i in range(k, n + 1, k):
+      print(i)
+  wrapper: |
+    {}
+
+    def _test():
+      import random as _random
+      _cases = [(3, 12), (5, 20), (2, 10), (7, 21), (4, 16)] + [
+        (_random.randint(2, 8), _random.randint(10, 30)) for _ in range(2)
+      ]
+      for _k, _n in _cases:
+        print("print_multiples(" + str(_k) + ", " + str(_n) + "):")
+        for _i in range(_k, _n + 1, _k):
+          print(_i)
+        print()
+      print("=== END EXPECTED OUTPUT ===")
+      for _k, _n in _cases:
+        print("print_multiples(" + str(_k) + ", " + str(_n) + "):")
+        print_multiples(_k, _n)
+        print()
+
+    _test()
+
+- id: count_occurrences
+  title: Count Occurrences
+  description: Write a function that counts how many times a value appears in a list.
+  template: |
+    def count_occurrences(lst, value):
+      |
+  modelSolution: |
+    count = 0
+    for x in lst:
+      if x == value:
+        count += 1
+    return count
+  wrapper: |
+    {}
+
+    def _test():
+      import random as _random
+      _cases = [
+        ([1, 2, 3, 2, 1], 2),
+        ([5, 5, 5, 5], 5),
+        ([1, 2, 3], 4),
+        (["a", "b", "a", "c", "a"], "a"),
+        ([_random.randint(1, 3) for _ in range(8)], 2),
+      ]
+      for _lst, _val in _cases:
+        print("count_occurrences(" + str(_lst) + ", " + repr(_val) + ") =", _lst.count(_val))
+      print("=== END EXPECTED OUTPUT ===")
+      for _lst, _val in _cases:
+        print("count_occurrences(" + str(_lst) + ", " + repr(_val) + ") =", count_occurrences(_lst, _val))
+
+    _test()
+
+- id: sum_digits
+  title: Sum of Digits
+  description: |
+    Write a function that returns the sum of the digits of a non-negative integer.
+
+    For example, the sum of digits of 1234 is 1 + 2 + 3 + 4 = 10.
+  template: |
+    def sum_digits(n):
+      |
+  modelSolution: |
+    total = 0
+    while n > 0:
+      total += n % 10
+      n //= 10
+    return total
+  wrapper: |
+    {}
+
+    def _test():
+      import random as _random
+      _cases = [0, 1, 123, 9999, 1234, 100] + [_random.randint(100, 9999) for _ in range(3)]
+      def _sd(n):
+        total = 0
+        while n > 0:
+          total += n % 10
+          n //= 10
+        return total
+      for _n in _cases:
+        print("sum_digits(" + str(_n) + ") =", _sd(_n))
+      print("=== END EXPECTED OUTPUT ===")
+      for _n in _cases:
+        print("sum_digits(" + str(_n) + ") =", sum_digits(_n))
 
     _test()

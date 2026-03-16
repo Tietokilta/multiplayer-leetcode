@@ -72,7 +72,7 @@ export class SpectatorController extends AbstractPlayerController<SpectatorState
         this.update((prev) => ({ output: prev.output + msg.content }));
         break;
       case "spectate_debuffs": {
-        this.updateDebuffs(msg.debuffs);
+        this.updateDebuffs(msg.debuffs.length === 0 ? false : msg.debuffs);
         this.rerender();
         break;
       }

@@ -2,16 +2,17 @@ import { useState, type ReactNode } from "react";
 import { useReadLocalStorage } from "usehooks-ts";
 
 type Props = {
-  children: ReactNode;
+  children?: ReactNode;
   onConnect: (myId: string, serverIp: string) => void;
   error: string | null;
+  storageKey?: string;
 };
 
-const Login = ({ children, onConnect, error }: Props) => {
-  const myId = useReadLocalStorage<string>("multiplayer-leetcode-my-id") ?? "";
+const Login = ({ children, onConnect, error, storageKey = "multiplayer-leetcode" }: Props) => {
+  const myId = useReadLocalStorage<string>(`${storageKey}-my-id`) ?? "";
   const [myIdInput, setMyIdInput] = useState(myId);
 
-  const serverIp = useReadLocalStorage<string>("multiplayer-leetcode-server-ip") ?? "";
+  const serverIp = useReadLocalStorage<string>(`${storageKey}-server-ip`) ?? "";
   const [serverIpInput, setServerIpInput] = useState(serverIp);
 
   return (

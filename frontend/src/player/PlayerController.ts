@@ -20,7 +20,7 @@ import { fireCharConfetti, fireConfettiAt, fireConfettiAtCursor, fireEmojiConfet
 
 export type ActiveDebuff = {
   name: Debuff;
-  type: string;
+  debuff_type: string;
   strength: number;
   duration: number;
   endTime: number; // Date.now() + duration * 1000
@@ -45,6 +45,7 @@ export type BasePlayerState = {
 export type PlayerState = BasePlayerState & {
   connected: ConnState;
   hasBeenConnected: boolean;
+  playerName: string | null;
 
   keyboardConnected: ConnState;
   currentKeyboard: string | undefined;
@@ -66,7 +67,7 @@ const example = `function twoSum(nums: number[], target: number): number[] {
 function debuffToActiveDebuff(debuff: DebuffItem, now: number): ActiveDebuff {
   return {
     name: debuff.name,
-    type: debuff.type,
+    debuff_type: debuff.debuff_type,
     strength: debuff.strength,
     duration: debuff.duration * 1000,
     endTime: now + debuff.duration * 1000,
@@ -76,8 +77,8 @@ function debuffToActiveDebuff(debuff: DebuffItem, now: number): ActiveDebuff {
 function filterActiveDebuffs(debuffs: ActiveDebuff[]) {
   const seen = new Set<string>();
   return debuffs.filter((d) => {
-    if (seen.has(d.type)) return false;
-    seen.add(d.type);
+    if (seen.has(d.debuff_type)) return false;
+    seen.add(d.debuff_type);
     return true;
   });
 }
@@ -115,8 +116,8 @@ export abstract class AbstractPlayerController<State extends BasePlayerState = B
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected debuffEnded(ended: ActiveDebuff): void {}
+  protected debuffEnded(ended: ActiveDebuff): void;
+  protected debuffEnded(): void {}
 
   protected updateDebuffs(newDebuffs: DebuffItem[] | false) {
     const now = Date.now();
@@ -179,7 +180,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
   constructor() {
     super();
     this.server.handleState = (state) => this.update({ connected: state });
-    this.server.handleLogin = (success: boolean) => success && this.update({ hasBeenConnected: true });
+    this.server.handleLogin = (welcome) => welcome && this.update({ hasBeenConnected: true, playerName: welcome.name });
     this.server.handleMessage = (data) => this.handleMessage(data);
     this.keyboardServer.handleState = (state) => this.update({ keyboardConnected: state });
     this.keyboardServer.handleMessage = (msg) => this.handleKeyboardMessage(msg);
@@ -189,6 +190,7 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
     return {
       connected: "not",
       hasBeenConnected: false,
+      playerName: null,
 
       rendered: this.editor.render(new Set()), // Initial render without debuffs
       puzzle: null,
@@ -302,13 +304,18 @@ export class PlayerController extends AbstractPlayerController<PlayerState> {
         if (data.debuffs.length === 0) {
           this.updateDebuffs(false);
           this.rerender();
+          this.sendLeds();
           break;
         }
         this.updateDebuffs(data.debuffs);
         this.rerender();
+        this.sendLeds();
         this.updateScreensaver(false);
         break;
       }
+      case "refresh":
+        window.location.reload();
+        break;
       case "error":
         console.error("Game server error:", data.message);
         this.update({ submissionError: data.message });

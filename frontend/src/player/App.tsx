@@ -98,6 +98,7 @@ function App() {
 
   const gameConnected = controller.usePlayerStore((state) => state.connected);
   const gameHasConnected = controller.usePlayerStore((state) => state.hasBeenConnected);
+  const playerName = controller.usePlayerStore((state) => state.playerName);
   const keyboardConnected = controller.usePlayerStore((state) => state.keyboardConnected);
 
   useEffect(() => {
@@ -125,6 +126,9 @@ function App() {
     <div
       className={`absolute ${minimalState ? "top-2 right-2" : "top-6 right-6"} z-101 flex items-center gap-2 text-xs`}
     >
+      {gameConnected === "connected" && playerName && (
+        <span className="p-1 rounded bg-black text-bold">{playerName}</span>
+      )}
       {gameConnected !== "connected" && generatedId.test(myId) && (
         <div className="p-1 rounded bg-black text-bold">id={myId}</div>
       )}

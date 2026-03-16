@@ -14,15 +14,57 @@ from typing import AsyncGenerator, Literal, Never, NotRequired, TypedDict, cast
 import aiosqlite
 from inotify_simple import Event as InotifyEvent, INotify, flags
 from openrouter import OpenRouter
-from websockets import ServerConnection, WebSocketException, serve
+from websockets import ClientConnection, ConnectionClosed, ServerConnection, WebSocketException, connect, serve
 from yaml import safe_load
 
 log = getLogger(__name__)
 
 ADMIN_PASSWORD = environ.get("ADMIN_PASSWORD")
+INFINITE_DURATION = 86400 * 365  # sentinel: duration=0 from client means "infinite"
 GENERATED_ID_RE = re.compile(r"^[0-9a-f]{12}$")
+MINIGAME_BACKEND = environ.get("MINIGAME_BACKEND")
 OPENROUTER_KEY = environ.get("OPENROUTER_KEY")
 SEPARATOR = "=== END EXPECTED OUTPUT ===\n"
+
+_SOLUTION_TOKEN_RE = re.compile(
+    r'"(?:[^"\\]|\\.)*"'
+    r"|'(?:[^'\\]|\\.)*'"
+    r"|[a-zA-Z_]\w*"
+    r"|[0-9]+(?:\.[0-9]+)?"
+    r"|[+\-*/%&|^~<>=!]+"
+    r"|[()[\]{},.:;@]"
+)
+
+
+def tokenize_solution(solution: str) -> tuple[list[str], list[list[str | int]], list[list[str | int]]]:
+    """Tokenize a model solution into a token list and a line structure.
+
+    Returns:
+        tokens: flat list of token strings (words, operators, punctuation)
+        lines: one entry per line; each entry is a list of str (whitespace gaps)
+               or int (index into tokens)
+    """
+    tokens: list[str] = []
+    lines: list[list[str | int]] = []
+    correct: list[list[str | int]] = []
+    for line in solution.splitlines():
+        line_parts: list[str | int] = []
+        corr_parts: list[str | int] = []
+        last_end = 0
+        for m in _SOLUTION_TOKEN_RE.finditer(line):
+            if m.start() > last_end:
+                line_parts.append(line[last_end : m.start()])
+                corr_parts.append(line[last_end : m.start()])
+            line_parts.append(-1)
+            corr_parts.append(m.group())
+            tokens.append(m.group())
+            last_end = m.end()
+        if last_end < len(line):
+            line_parts.append(line[last_end:])
+            corr_parts.append(line[last_end:])
+        lines.append(line_parts)
+        correct.append(corr_parts)
+    return tokens, lines, correct
 
 
 class LoginCmd(TypedDict):
@@ -74,10 +116,53 @@ class AdminDebuffCmd(TypedDict):
     duration: float
 
 
+class PreparedDebuff(TypedDict):
+    """A debuff prepared for launch_round, matching the frontend PreparedDebuff shape."""
+
+    name: str
+    debuff_type: str
+    strength: float
+    duration: float
+
+
+class MinigamePuzzleActivated(TypedDict):
+    type: Literal["puzzle_activated"]
+    players: list[str]
+    awards: list[PreparedDebuff]
+    tokens: list[str]
+    solution_lines: list[list[str | int]]
+    correct_solution: list[list[str | int]]
+    template: str
+
+
+class MinigameDebuffCmd(TypedDict):
+    """Debuff assignment from the minigame backend (single player target)."""
+
+    type: Literal["administer_debuff"]
+    player: str
+    name: str
+    debuff_type: str
+    strength: float
+    duration: float
+
+
 class DebuffStateCmd(TypedDict):
     type: Literal["debuff_state"]
     name: str
     payload: object
+
+
+class AdminClearDebuffCmd(TypedDict):
+    type: Literal["clear_debuff"]
+    players: list[str]
+    name: str | None
+
+
+class AdminLaunchRoundCmd(TypedDict):
+    type: Literal["launch_round"]
+    puzzle: str
+    initial_debuffs: list[PreparedDebuff]
+    awards: list[PreparedDebuff]
 
 
 class AssignIdCmd(TypedDict):
@@ -86,11 +171,16 @@ class AssignIdCmd(TypedDict):
     player: str
 
 
-type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | DebuffStateCmd | AssignIdCmd
+type WsCmd = LoginCmd | EditCmd | SubmitCmd | AdminLoginCmd | AdminPlayerCmd | AdminSpectateCmd | AdminPuzzleCmd | AdminReloadPuzzlesCmd | AdminDebuffCmd | AdminClearDebuffCmd | AdminLaunchRoundCmd | DebuffStateCmd | AssignIdCmd
 
 
 class WelcomeMessage(TypedDict):
-    type: Literal["welcome"] | Literal["admin_welcome"]
+    type: Literal["welcome"]
+    name: str
+
+
+class AdminWelcomeMessage(TypedDict):
+    type: Literal["admin_welcome"]
 
 
 class CodeRunOutput(TypedDict):
@@ -178,7 +268,7 @@ class SpectateOutputMessage(TypedDict):
 
 class DebuffItem(TypedDict):
     name: str
-    type: str
+    debuff_type: str
     strength: float
     duration: float  # remaining seconds from now
 
@@ -206,7 +296,7 @@ class PendingLoginsMessage(TypedDict):
     ids: list[str]
 
 
-type WsMessage = WelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage | PendingLoginsMessage
+type WsMessage = WelcomeMessage | AdminWelcomeMessage | CodeRunOutput | CodeRunState | ActionError | PuzzleJson | PlayerJson | PuzzleListMessage | PlayerListMessage | SpectateMessage | SpectateStateMessage | SpectateOutputMessage | DebuffMessage | SpectateDebuffMessage | SpectateDebuffStateMessage | PendingLoginsMessage
 
 
 LLM_MODEL = "openai/gpt-5.3-codex"
@@ -353,6 +443,21 @@ class Debuff:
 
 
 @dataclass
+class PlayerRoundStats:
+    """Per-player statistics collected during a puzzle round."""
+
+    puzzle_id: str
+    start_time: float  # time.monotonic() when round started for this player
+    keypresses: int = 0  # code-changing keystrokes
+    wrong_submissions: int = 0
+    debuffs_received: list[dict] = field(default_factory=list)
+    solved: bool = False
+    time_to_solution: float | None = None  # seconds from start_time
+    solution_keypresses: int | None = None  # keypresses at time of valid submission
+    solution_length: int | None = None  # len(code) of valid submission
+
+
+@dataclass
 class Player:
     name: str
     score: int
@@ -380,7 +485,7 @@ class Player:
             "debuffs": [
                 {
                     "name": d.name,
-                    "type": d.debuff_type,
+                    "debuff_type": d.debuff_type,
                     "strength": d.strength,
                     "duration": d.start + d.duration - now,
                 }
@@ -426,9 +531,13 @@ class Puzzle:
     id: str
     title: str
     description: str
-    template: str  # code template to start with
+    template: str  # code template to start with (| removed)
+    raw_template: str  # original template with | cursor marker
     start_pos: tuple[int, int]  # (col, row)
     wrapper: str  # wrapper to insert user code in with format(); must print expected output then SEPARATOR before running user code
+    solution_tokens: list[str]
+    solution_lines: list[list[str | int]]
+    correct_solution: list[list[str | int]]
 
     def json(self) -> PuzzleJson:
         """Returns the puzzle data as JSON."""
@@ -474,6 +583,10 @@ class PlayerManager:
         self.debuff_system_prompts: dict[str, str] = {}
         self.pending_ids: set[str] = set()
         self.id_mapping: dict[str, str] = {}
+        self.minigame_puzzle_event = asyncio.Event()
+        self.minigame_puzzle_buf: MinigamePuzzleActivated | None = None
+        self.round_stats: dict[str, PlayerRoundStats] = {}
+        self.puzzle_start_time: float | None = None
 
     async def load_players(self) -> None:
         """Loads players from the database into memory."""
@@ -494,11 +607,73 @@ class PlayerManager:
                 self.broadcast_to_admins(self.get_pending_logins_msg())
             return {"type": "error", "message": "No such player"}
         player = self.players[actual_name]
+        # Ensure round stats exist if a round is active and player is connecting
+        if actual_name not in self.round_stats and self.current_puzzle:
+            self.round_stats[actual_name] = PlayerRoundStats(
+                puzzle_id=self.current_puzzle.id,
+                start_time=self.puzzle_start_time or time.monotonic(),
+            )
         await player.connected(ws)
         return player
 
+    async def _save_round_stats(self) -> None:
+        """Upsert current in-memory round stats to the database."""
+        if not self.round_stats:
+            return
+        rows = [
+            (
+                name,
+                stats.puzzle_id,
+                int(stats.solved),
+                stats.time_to_solution,
+                stats.wrong_submissions,
+                stats.keypresses,
+                json.dumps(stats.debuffs_received),
+                stats.solution_length,
+            )
+            for name, stats in self.round_stats.items()
+        ]
+        await self.db.executemany(
+            """INSERT OR REPLACE INTO puzzle_stats
+               (player_name, puzzle_id, solved, time_to_solution, wrong_submissions,
+                keypresses, debuffs_received, solution_length)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+        await self.db.commit()
+
+    async def get_stats(self) -> dict:
+        """Flush and return all puzzle stats from the database."""
+        await self._save_round_stats()
+        cursor = await self.db.execute(
+            """SELECT player_name, puzzle_id, solved, time_to_solution,
+                      wrong_submissions, keypresses, debuffs_received, solution_length
+               FROM puzzle_stats ORDER BY puzzle_id, player_name"""
+        )
+        rows = await cursor.fetchall()
+        return {
+            "type": "stats",
+            "stats": [
+                {
+                    "player_name": row[0],
+                    "puzzle_id": row[1],
+                    "solved": bool(row[2]),
+                    "time_to_solution": row[3],
+                    "wrong_submissions": row[4],
+                    "keypresses": row[5],
+                    "debuffs_received": json.loads(row[6]),
+                    "solution_length": row[7],
+                }
+                for row in rows
+            ],
+        }
+
     async def switch_puzzle(
-        self, id: str, reset_editors: bool = True, expire_submissions: bool = False
+        self,
+        id: str,
+        reset_editors: bool = True,
+        expire_submissions: bool = False,
+        awards: list[PreparedDebuff] | None = None,
     ) -> ActionError | None:
         """Changes the current puzzle to the given one.
 
@@ -506,6 +681,7 @@ class PlayerManager:
             id: The puzzle ID to switch to.
             reset_editors: If True, reset all player editors to the puzzle template.
                            If False, only send updated puzzle info without resetting editors.
+            awards: A list of debuffs to be awarded during the round.
         """
         if id not in self.puzzles:
             return {"type": "error", "message": "No such puzzle"}
@@ -538,9 +714,21 @@ class PlayerManager:
             (puzzle.id,),
         )
         await self.db.commit()
+        # Save stats for the previous round before switching
+        await self._save_round_stats()
         # Synchronously update state (no further awaits)
         self.current_puzzle = puzzle
         self.broadcast_to_admins(self.get_puzzle_list())
+        # TODO: Make reloading a puzzle not destroy the awards on the minigame server.
+        if MINIGAME_BACKEND:
+            self.notify_minigame_puzzle(awards or [])
+        # Initialize fresh round stats for all players
+        now = time.monotonic()
+        self.puzzle_start_time = now
+        self.round_stats = {
+            name: PlayerRoundStats(puzzle_id=puzzle.id, start_time=now)
+            for name in self.players
+        }
         self.submissions.clear()
         for row in existing_submissions:
             if row[0] in self.players:
@@ -565,6 +753,11 @@ class PlayerManager:
                     player.col = puzzle.start_pos[0]
                     player.row = puzzle.start_pos[1]
                 self.unsaved.add(player.name)
+            # Clear all active debuffs on puzzle switch
+            player.debuffs = []
+            clear: DebuffMessage = {"type": "debuffs", "debuffs": []}
+            player.send(clear)
+            self.notify_spectators(player.name, clear)
             player.send(puzzle.json())
             if reset_editors:
                 player.send(player.editor_json())
@@ -595,7 +788,16 @@ class PlayerManager:
             log.info(
                 f"Submission finished for player {player.name} with status {submission.status}, error: {submission.error}"
             )
-            # TODO: recalculate score based on time, attempts, etc?
+            # Record round stats
+            if player.name in self.round_stats:
+                stats = self.round_stats[player.name]
+                if submission.status == "valid":
+                    stats.solved = True
+                    stats.time_to_solution = time.monotonic() - stats.start_time
+                    stats.solution_keypresses = stats.keypresses
+                    stats.solution_length = len(submission.code)
+                elif submission.status == "invalid":
+                    stats.wrong_submissions += 1
             # Save submission to database
             await self.db.execute(
                 """
@@ -639,10 +841,16 @@ class PlayerManager:
                 start_code = entry["template"].partition("|")[0]
                 start_row = start_code.count("\n")
                 start_col = len(start_code.rpartition("\n")[2])
+                raw_solution = entry.get("modelSolution", "").strip()
+                solution_tokens, solution_lines, correct_solution = tokenize_solution(raw_solution)
                 puzzle = Puzzle(
-                    **{k: v for k, v in entry.items() if k not in ("template", "start_pos")},
+                    **{k: v for k, v in entry.items() if k not in ("template", "start_pos", "modelSolution")},
                     template=entry["template"].replace("|", ""),
+                    raw_template=entry["template"],
                     start_pos=(start_col, start_row),
+                    solution_tokens=solution_tokens,
+                    solution_lines=solution_lines,
+                    correct_solution=correct_solution,
                 )
                 puzzles[puzzle.id] = puzzle
         except Exception:
@@ -743,7 +951,7 @@ class PlayerManager:
 
         data = json.dumps(converted)
         for admin in self.admins.values():
-            if converted["type"] == "spectate_state" or admin.is_spectating(player_name):
+            if converted["type"] in ("spectate_state", "spectate_debuffs") or admin.is_spectating(player_name):
                 try:
                     # TODO: use queue tasks like with players
                     asyncio.create_task(admin.ws.send(data, True))
@@ -863,7 +1071,8 @@ class PlayerManager:
         """Administers a debuff to the listed players. Duration stacks with existing same-type debuffs."""
         now = time.monotonic()
         found_any = False
-        for player_name in cmd["players"]:
+        effective_players = list(self.players.keys()) if "*" in cmd["players"] else cmd["players"]
+        for player_name in effective_players:
             player = self.players.get(player_name)
             if not player:
                 continue
@@ -876,7 +1085,8 @@ class PlayerManager:
             # Find longest remaining duration of same-type debuffs to stack with
             same_type = [d for d in player.debuffs if d.debuff_type == cmd["debuff_type"]]
             extra = max((d.start + d.duration - now for d in same_type), default=0.0)
-            duration = cmd["duration"] + extra
+            cmd_duration = INFINITE_DURATION if cmd["duration"] == 0 else cmd["duration"]
+            duration = cmd_duration + extra
             # Administer new debuff
             player.debuffs.append(
                 Debuff(
@@ -887,12 +1097,17 @@ class PlayerManager:
                     duration=duration,
                 )
             )
+            # Record in round stats
+            if player_name in self.round_stats:
+                self.round_stats[player_name].debuffs_received.append(
+                    {"name": cmd["name"], "strength": cmd["strength"], "duration": cmd["duration"]}
+                )
             msg: DebuffMessage = {
                 "type": "debuffs",
                 "debuffs": [
                     {
                         "name": cmd["name"],
-                        "type": cmd["debuff_type"],
+                        "debuff_type": cmd["debuff_type"],
                         "strength": cmd["strength"],
                         "duration": duration,
                     }
@@ -906,6 +1121,94 @@ class PlayerManager:
         if not found_any:
             return {"type": "error", "message": "No such player"}
         return None
+
+    def clear_debuff(self, player_name: str, name: str | None) -> None:
+        """Clears debuffs for a player. name=None clears all, otherwise clears by debuff name."""
+        if player_name not in self.players:
+            return
+        player = self.players[player_name]
+        if name is None:
+            player.debuffs = []
+        else:
+            player.debuffs = [d for d in player.debuffs if d.name != name]
+        clear: DebuffMessage = {"type": "debuffs", "debuffs": []}
+        player.send(clear)
+        self.notify_spectators(player_name, clear)
+        if player.debuffs:
+            remaining = player.debuffs_json()
+            player.send(remaining)
+            self.notify_spectators(player_name, remaining)
+
+    def notify_minigame_puzzle(self, awards: list[PreparedDebuff]) -> None:
+        """Buffer the current puzzle for the minigame backend and wake the sender."""
+        puzzle = self.current_puzzle
+        if not puzzle or not puzzle.solution_tokens:
+            return
+        self.minigame_puzzle_buf = MinigamePuzzleActivated(
+            type="puzzle_activated",
+            players=list(self.players.keys()),
+            awards=awards,
+            tokens=puzzle.solution_tokens,
+            solution_lines=puzzle.solution_lines,
+            correct_solution=puzzle.correct_solution,
+            template=puzzle.raw_template,
+        )
+        self.minigame_puzzle_event.set()
+
+    async def minigame_ws_task(self, done: asyncio.Event) -> None:
+        """Background task: maintain a WebSocket connection to the minigame backend."""
+        url = MINIGAME_BACKEND
+        if not url:
+            return
+        headers = {"X-Secret": ADMIN_PASSWORD or ""}
+        while not done.is_set():
+            try:
+                async with connect(url, additional_headers=headers) as ws:
+                    log.info("Connected to minigame backend")
+                    # Run send/receive concurrently
+                    send_task = asyncio.create_task(self._minigame_send_loop(ws, done))
+                    try:
+                        async for raw in ws:
+                            try:
+                                msg = json.loads(raw)
+                                if msg.get("type") == "administer_debuff":
+                                    debuff_cmd: MinigameDebuffCmd = msg
+                                    self.administer_debuff(
+                                        AdminDebuffCmd(
+                                            type="administer_debuff",
+                                            players=[debuff_cmd["player"]],
+                                            name=debuff_cmd["name"],
+                                            debuff_type=debuff_cmd["debuff_type"],
+                                            strength=debuff_cmd["strength"],
+                                            duration=debuff_cmd["duration"],
+                                        )
+                                    )
+                                else:
+                                    log.warning(f"Unknown message from minigame: {msg.get('type')!r}")
+                            except Exception:
+                                log.exception("Error handling minigame message")
+                    finally:
+                        send_task.cancel()
+            except asyncio.CancelledError:
+                return
+            except Exception:
+                log.exception("Minigame backend connection error")
+            if not done.is_set():
+                await asyncio.sleep(1)
+
+    async def _minigame_send_loop(self, ws: ClientConnection, done: asyncio.Event) -> None:
+        """Wait for puzzle updates and send them over the minigame WebSocket."""
+        try:
+            while not done.is_set():
+                if self.minigame_puzzle_buf is not None:
+                    log.info("Sending puzzle update to minigame backend")
+                    puzzle = self.minigame_puzzle_buf
+                    self.minigame_puzzle_buf = None
+                    self.minigame_puzzle_event.clear()
+                    await ws.send(json.dumps(puzzle))
+                await self.minigame_puzzle_event.wait()
+        except (ConnectionClosed, asyncio.CancelledError):
+            pass
 
 
 async def send(ws: ServerConnection, message: WsMessage):
@@ -979,6 +1282,35 @@ async def ws_handler(
                     elif msg["type"] == "administer_debuff":
                         if error := manager.administer_debuff(msg):
                             await send(ws, error)
+                    elif msg["type"] == "clear_debuff":
+                        player_names = msg.get("players")
+                        name = msg.get("name")
+                        targets = list(manager.players.keys()) if "*" in player_names else player_names
+                        for player_name in targets:
+                            manager.clear_debuff(player_name, name)
+                    elif msg["type"] == "launch_round":
+                        puzzle_id = msg["puzzle"]
+                        initial_debuffs = msg["initial_debuffs"]
+                        awards = msg["awards"]
+                        log.info(
+                            f"Admin launching round with puzzle {puzzle_id}, {len(initial_debuffs)} initial debuffs, {len(awards)} awards"
+                        )
+                        if error := await manager.switch_puzzle(puzzle_id, expire_submissions=True, awards=awards):
+                            await send(ws, error)
+                        else:
+                            for debuff_cmd in initial_debuffs:
+                                manager.administer_debuff(
+                                    AdminDebuffCmd(
+                                        type="administer_debuff",
+                                        players=["*"],
+                                        name=debuff_cmd["name"],
+                                        debuff_type=debuff_cmd["debuff_type"],
+                                        strength=debuff_cmd["strength"],
+                                        duration=debuff_cmd["duration"],
+                                    )
+                                )
+                    elif msg["type"] == "get_stats":
+                        await send(ws, await manager.get_stats())
                     elif msg["type"] == "assign_id":
                         generated_id = msg["generated_id"]
                         player_name = msg["player"]
@@ -991,6 +1323,10 @@ async def ws_handler(
                             manager.id_mapping[generated_id] = player_name
                             manager.pending_ids.discard(generated_id)
                             manager.broadcast_to_admins(manager.get_pending_logins_msg())
+                    elif msg["type"] == "refresh_clients":
+                        log.info("Admin refreshing all game clients")
+                        for p in manager.players.values():
+                            p.send({"type": "refresh"})
                     else:
                         await send(ws, {"type": "error", "message": "unknown admin action"})
 
@@ -999,6 +1335,8 @@ async def ws_handler(
                     assert player is not None
                     if msg["type"] == "edit":
                         if "code" in msg:
+                            if msg["code"] != player.code and player.name in manager.round_stats:
+                                manager.round_stats[player.name].keypresses += 1
                             player.code = msg["code"]
                         player.row = msg["row"]
                         player.col = msg["col"]
@@ -1031,6 +1369,10 @@ async def ws_handler(
                         await send(ws, manager.get_puzzle_list())
                         await send(ws, manager.get_player_list())
                         await send(ws, manager.get_pending_logins_msg())
+                        # Send current debuffs for all players
+                        for name, p in manager.players.items():
+                            p_debuffs = p.debuffs_json()
+                            await send(ws, {**p_debuffs, "type": "spectate_debuffs", "player": name})
                         # Send current submission state for all players
                         for name, sub in manager.submissions.items():
                             await send(
@@ -1057,7 +1399,7 @@ async def ws_handler(
                         break  # just dump the connection
                     player = player_or_err
                     log.info(f"Player logged in: {name}")
-                    await send(ws, {"type": "welcome"})
+                    await send(ws, {"type": "welcome", "name": player.name})
                     # Send current puzzle, if any
                     if puzzle := manager.current_puzzle:
                         await send(ws, puzzle.json())
@@ -1181,6 +1523,18 @@ async def main():
             key TEXT PRIMARY KEY NOT NULL,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS puzzle_stats (
+            player_name VARCHAR(15) NOT NULL,
+            puzzle_id VARCHAR(15) NOT NULL,
+            solved INTEGER NOT NULL DEFAULT 0,
+            time_to_solution REAL,
+            wrong_submissions INTEGER NOT NULL DEFAULT 0,
+            keypresses INTEGER NOT NULL DEFAULT 0,
+            debuffs_received TEXT NOT NULL DEFAULT '[]',
+            solution_length INTEGER,
+            PRIMARY KEY (player_name, puzzle_id),
+            FOREIGN KEY (player_name) REFERENCES players(name)
+        );
         """
     )
     await db.commit()
@@ -1197,6 +1551,10 @@ async def main():
 
     save_players = asyncio.create_task(save_players_periodically(player_manager, done))
     watch_yamls = asyncio.create_task(watch_yaml_files(player_manager, done))
+    minigame_task: asyncio.Task[None] | None = None
+    if MINIGAME_BACKEND:
+        log.info(f"Minigame backend configured at {MINIGAME_BACKEND}:6978")
+        minigame_task = asyncio.create_task(player_manager.minigame_ws_task(done))
 
     server = await serve(lambda ws: ws_handler(ws, player_manager), "localhost", 6979)
 
@@ -1205,7 +1563,14 @@ async def main():
 
     # Wait for background tasks to finish
     await save_players
+    await player_manager._save_round_stats()
     await watch_yamls
+    if minigame_task:
+        minigame_task.cancel()
+        try:
+            await minigame_task
+        except asyncio.CancelledError:
+            pass
 
     await db.close()
 

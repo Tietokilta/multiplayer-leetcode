@@ -41,7 +41,7 @@ export const clippyDebuffs = [
 ];
 
 export type DebuffInfo = {
-  type: string;
+  debuff_type: string;
   title: string;
   description: string;
   maxStrength?: number;
@@ -53,13 +53,13 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
   // Input order debuffs:
   [Debuff.random_order]: {
     // TODO test
-    type: "order",
+    debuff_type: "order",
     title: "Who's on first",
     description: "Keyboard turns go in random order.",
   },
   [Debuff.auto_cycle]: {
     // TODO test
-    type: "order",
+    debuff_type: "order",
     title: "NASCAR Programming",
     description: "Keyboard order cycles based on time, instead of changing per keystroke.",
     maxStrength: 50, // cycles per 10s
@@ -67,53 +67,53 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
   },
   [Debuff.row_by_row]: {
     // TODO test
-    type: "order",
+    debuff_type: "order",
     title: "Home Row Hero",
     description: "Instead of a defined order, each keyboard allows a different keyboard row to be used.",
   },
 
   // Stackable input debuffs:
   [Debuff.reverse_navigation]: {
-    type: "input1",
+    debuff_type: "input1",
     title: "Lost in Space",
     description: "Reverses the direction of navigation keys.",
   },
   [Debuff.input_lag]: {
-    type: "input2",
+    debuff_type: "input2",
     title: "KUKA SIIN NETIS ON",
     description: "Causes random input lag.",
     maxStrength: 2000, // ms of lag
     defaultStrength: 1000,
   },
   [Debuff.key_shift]: {
-    type: "input3",
+    debuff_type: "input3",
     title: 'Kirjoita "curry"',
     description: "Shifts all character keys to the left or right.",
   },
   [Debuff.invisible_cursor]: {
-    type: "input4",
+    debuff_type: "input4",
     title: "Where's Waldo?",
     description: "Hides the cursor.",
   },
   [Debuff.random_duplicate]: {
-    type: "input5",
+    debuff_type: "input5",
     title: "Sticky Keys",
     description: "Randomly duplicates typed characters.",
     maxStrength: 50, // % chance
     defaultStrength: 15,
   },
   [Debuff.caps_lock]: {
-    type: "input6",
+    debuff_type: "input6",
     title: "CRUISE CONTROL FOR COOL",
     description: "Pretends Caps Lock is on.",
   },
   [Debuff.cursor_shift]: {
-    type: "input7",
+    debuff_type: "input7",
     title: "Off by One",
     description: "The cursor appears a space away from its actual position.",
   },
   [Debuff.screensaver]: {
-    type: "input8",
+    debuff_type: "input8",
     title: "Are You Still There?",
     description: "After brief inactivity, a DVD screensaver covers the editor.",
     maxStrength: 10000, // 10000 - ms of inactivity before screensaver
@@ -123,96 +123,96 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
 
   // Stackable visual debuffs:
   [Debuff.funky_fonts]: {
-    type: "visual1",
+    debuff_type: "visual1",
     title: "Comic Relief",
     description: "Makes each character appear in a random font.",
   },
   [Debuff.disco_mode]: {
-    type: "visual2",
+    debuff_type: "visual2",
     title: "Rave Review",
     description: "Adds a random background color to each character.",
   },
   [Debuff.emoji_confetti]: {
-    type: "visual4",
+    debuff_type: "visual4",
     title: "😂😂😂",
     description: "Makes emoji appear on each keystroke.",
     defaultDuration: 60,
   },
   [Debuff.confetti]: {
-    type: "visual5",
+    debuff_type: "visual5",
     title: "Party Pooper",
     description: "Makes confetti appear on each keystroke.",
     defaultDuration: 60,
   },
   [Debuff.squiggles]: {
-    type: "visual6",
+    debuff_type: "visual6",
     title: "Impostor Syndrome",
     description: "Adds fake error squiggles to the code.",
     defaultDuration: 60,
   },
   [Debuff.subway_surfers]: {
-    type: "visual7",
+    debuff_type: "visual7",
     title: "Brainrot Mode",
     description: "Adds Subway Surfers to the side.",
     defaultDuration: 60,
   },
   [Debuff.waves]: {
-    type: "visual8",
+    debuff_type: "visual8",
     title: "Drowning in Code",
     description: "Makes the characters wave around.",
     maxStrength: 20, // px of wave amplitude
     defaultStrength: 10,
   },
   [Debuff.cursor_blink]: {
-    type: "visual9",
+    debuff_type: "visual9",
     title: "Blink and You'll Miss It",
     description: "Makes the cursor blink rapidly in an unsettling random pattern.",
   },
 
   // Big visual debuffs:
   [Debuff.shake]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "Earthquake Protocol",
     description: "Makes the editor shake randomly.",
   },
   [Debuff.lights_out]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "Fear of the Dark",
     description: 'Makes the editor dark with a moving "window".',
     maxStrength: 40, // 10 / size of window relative to editor
     defaultStrength: 20,
   },
   [Debuff.fog_of_war]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "Fog of War",
     description: "Only shows the line being edited and the two lines around it.",
   },
   [Debuff.flip_horizontal]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "Arabic Mode",
     description: "Flips the editor horizontally.",
   },
   [Debuff.flip_vertical]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "import antigravity",
     description: "Flips the editor vertically.",
   },
   [Debuff.nausea]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "Rough Seas",
     description: "Minecraft-like nausea effect on the editor.",
     maxStrength: 7, // stuff is scaled down diagonally by strength * 0.1
     defaultStrength: 3,
   },
   [Debuff.hyperfocus]: {
-    type: "visual",
+    debuff_type: "visual",
     title: "Hyperfocus",
     description: "Zooms in the characters near the cursor.",
   },
 
   // One-off debuffs:
   [Debuff.keyboard_cat]: {
-    type: "one_off",
+    debuff_type: "one_off",
     title: "Keyboard Cat",
     description: "Inserts random characters when received.",
     maxStrength: 100, // chars
@@ -220,19 +220,19 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     defaultDuration: 20,
   },
   [Debuff.clippy_attack]: {
-    type: "one_off",
+    debuff_type: "one_off",
     title: "It Looks Like You're Struggling",
     description: "Clippy adds bugs to the user's code.",
     defaultDuration: 25,
   },
   [Debuff.clippy_comments]: {
-    type: "one_off",
+    debuff_type: "one_off",
     title: "Unsolicited Advice",
     description: 'Clippy adds "helpful" LLM comments after each line.',
     defaultDuration: 25,
   },
   [Debuff.angry_bird]: {
-    type: "one_off",
+    debuff_type: "one_off",
     title: "Angry Bird",
     description: "Launches an angry bird across the screen, breaking characters as it goes.",
     maxStrength: 30, // chars deleted
@@ -240,12 +240,12 @@ export const debuffInfo: Record<Debuff, DebuffInfo> = {
     defaultDuration: 20,
   },
   [Debuff.clippy_syntax]: {
-    type: "one_off",
+    debuff_type: "one_off",
     title: "from __future__ import braces",
     description: "Converts all control structures to use curly braces, adding random ones if there are none.",
   },
   [Debuff.clippy_refactor]: {
-    type: "one_off",
+    debuff_type: "one_off",
     title: "Surprise Refactor",
     description: "Clippy randomly renames all variables in the code.",
   },

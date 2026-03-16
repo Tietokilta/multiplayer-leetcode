@@ -16,7 +16,7 @@ export type PlayerCmd =
 
 export type DebuffItem = {
   name: Debuff;
-  type: string;
+  debuff_type: string;
   strength: number;
   duration: number; // remaining seconds from now
 };
@@ -26,13 +26,14 @@ export type PuzzleMessage = { type: "puzzle"; title: string; description: string
 export type StateMessage = { type: "state"; state: "running" | "valid" | "invalid"; error?: string };
 
 export type PlayerMessage =
-  | { type: "welcome" }
+  | { type: "welcome"; name: string }
   | EditorMessage
   | PuzzleMessage
   | { type: "output"; first: boolean; content: string }
   | StateMessage
   | { type: "debuffs"; debuffs: DebuffItem[] }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "refresh" };
 
 export type KeyboardServerCmd = [keyboardId: string, numLock: 0 | 1, capsLock: 0 | 1, scrollLock: 0 | 1];
 

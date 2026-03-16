@@ -391,3 +391,34 @@ html.debuff-waves body,
     opacity: 0;
   }
 }
+
+@property --ratelimit-pos {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+.ratelimit {
+  --ratelimit-left: var(--color-gray-400);
+  --ratelimit-right: var(--color-gray-600);
+  background-image: linear-gradient(
+    to right,
+    var(--ratelimit-left) var(--ratelimit-pos),
+    var(--ratelimit-right) var(--ratelimit-pos)
+  );
+  animation: ratelimit 5s linear 1;
+}
+
+.incorrect.ratelimit {
+  --ratelimit-left: var(--color-red-400);
+  --ratelimit-right: var(--color-red-600);
+}
+
+@keyframes ratelimit {
+  from {
+    --ratelimit-pos: 100%;
+  }
+  to {
+    --ratelimit-pos: 0%;
+  }
+}

@@ -14,7 +14,19 @@ export type AdminCmd =
   | { type: "remove_player"; name: string }
   | { type: "reload_puzzles" }
   | { type: "assign_id"; generated_id: string; player: string }
-  | { type: "administer_debuff"; players: string[]; name: string; debuff_type: string; strength: number; duration: number };
+  | {
+      type: "administer_debuff";
+      players: string[];
+      name: string;
+      debuff_type: string;
+      strength: number;
+      duration: number;
+    }
+  | { type: "launch_round"; puzzle: string; initial_debuffs: PreparedDebuff[]; awards: PreparedDebuff[] }
+  | { type: "clear_debuff"; players: string[]; name: string | null }
+  | { type: "refresh_clients" };
+
+export type PreparedDebuff = { name: string; debuff_type: string; strength: number; duration: number };
 
 export type AdminMessage =
   | { type: "admin_welcome" }
@@ -62,7 +74,7 @@ export function useAdminState({ spectateAll = false }: Options) {
     setError(null);
 
     server.handleState = setConnState;
-    server.handleLogin = setLoggedIn;
+    server.handleLogin = (welcome) => setLoggedIn(!!welcome);
     server.handleLoginError = setLoginError;
     server.handleMessage = (data) => {
       switch (data.type) {
