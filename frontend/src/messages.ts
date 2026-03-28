@@ -26,7 +26,7 @@ export type PuzzleMessage = { type: "puzzle"; title: string; description: string
 export type StateMessage = { type: "state"; state: "running" | "valid" | "invalid"; error?: string };
 
 export type PlayerMessage =
-  | { type: "welcome" }
+  | { type: "welcome"; name: string }
   | EditorMessage
   | PuzzleMessage
   | { type: "output"; first: boolean; content: string }

@@ -6,6 +6,8 @@ export const stateColors: Record<ConnState, string> = {
   connecting: "bg-yellow-500",
 };
 
+export type WelcomeInfo = { type: "welcome" | "admin_welcome"; name: string };
+
 export class GameServerHandler<TCmd extends { type: string }, TMsg extends { type: string }> {
   active: boolean = false;
   hasOpened: boolean = false;
@@ -18,7 +20,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
   queuedSubmit: TCmd | null = null;
 
   handleState: ((state: ConnState) => void) | null = null;
-  handleLogin: ((loggedIn: boolean) => void) | null = null;
+  handleLogin: ((welcome: WelcomeInfo | null) => void) | null = null;
   handleLoginError: ((message: string) => void) | null = null;
   handleMessage: ((data: TMsg) => void) | null = null;
 
@@ -32,11 +34,11 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
     }
   }
 
-  connect(ip: string, loginCmd: TCmd) {
+  connect(ip: string, loginCmd: TCmd, port: number = 6979) {
     console.log("Connecting to game server at", ip);
     this.handleState?.("connecting");
     this.active = true;
-    this.socket = new WebSocket(`ws://${ip}:6979/`);
+    this.socket = new WebSocket(`ws://${ip}:${port}/`);
 
     this.socket.addEventListener("open", () => {
       console.log("Game server connection opened");
@@ -51,7 +53,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
       // Handle login responses
       if (data.type === "welcome" || data.type === "admin_welcome") {
         this.loggedIn = true;
-        this.onLogin();
+        this.onLogin(data as unknown as WelcomeInfo);
       } else if (data.type === "error" && !this.loggedIn) {
         this.handleLoginError?.((data as TMsg & { message: string }).message);
       } else {
@@ -72,7 +74,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
       }
       if (this.loggedIn) {
         this.loggedIn = false;
-        this.handleLogin?.(false);
+        this.handleLogin?.(null);
       } else if (!this.hasOpened) {
         // Disconnect, failed before login
         this.disconnect();
@@ -83,7 +85,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
         this.socket = null;
         if (this.active) {
           console.log("Attempting to reconnect to game server in 1000ms...");
-          this.timeout = window.setTimeout(() => this.connect(ip, loginCmd), 1000);
+          this.timeout = window.setTimeout(() => this.connect(ip, loginCmd, port), 1000);
         }
       }
     });
@@ -91,13 +93,11 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
 
   protected onOpen(loginCmd: TCmd) {
     // Send login command
-    if (loginCmd) {
-      this.socket!.send(JSON.stringify(loginCmd));
-    }
+    this.socket!.send(JSON.stringify(loginCmd));
   }
 
-  protected onLogin() {
-    this.handleLogin?.(true);
+  protected onLogin(welcome: WelcomeInfo) {
+    this.handleLogin?.(welcome);
     // Flush queued commands
     if (this.queuedEdit) {
       this.socket!.send(JSON.stringify(this.queuedEdit));
@@ -117,7 +117,7 @@ export class GameServerHandler<TCmd extends { type: string }, TMsg extends { typ
     this.queuedSubmit = null;
     this.socket?.close();
     this.socket = null;
-    this.handleLogin?.(false);
+    this.handleLogin?.(null);
     this.handleState?.("not");
     clearTimeout(this.timeout);
   }
